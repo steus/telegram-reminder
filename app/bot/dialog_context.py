@@ -15,6 +15,7 @@ class DialogContext:
     onboarded: bool = False
     step: str | None = None
     settings_field: str | None = None
+    task_step: str | None = None  # collect | confirm | correct
 
     @classmethod
     def from_json(cls, raw: str | None) -> DialogContext:
@@ -28,6 +29,7 @@ class DialogContext:
             onboarded=bool(data.get("onboarded", False)),
             step=data.get("step"),
             settings_field=data.get("settings_field"),
+            task_step=data.get("task_step"),
         )
 
     def to_json(self) -> str:
@@ -63,3 +65,15 @@ class DialogContext:
 
     def clear_settings_edit(self) -> None:
         self.settings_field = None
+
+    def start_task_collection(self) -> None:
+        self.task_step = "collect"
+
+    def show_task_confirmation(self) -> None:
+        self.task_step = "confirm"
+
+    def start_task_correction(self) -> None:
+        self.task_step = "correct"
+
+    def clear_task_flow(self) -> None:
+        self.task_step = None

@@ -18,3 +18,9 @@ class SettingsStates(StatesGroup):
     menu = State()
     editing = State()
     custom_time = State()
+
+
+class TaskStates(StatesGroup):
+    collecting = State()
+    correcting = State()
+    confirming = State()

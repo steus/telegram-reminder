@@ -7,9 +7,19 @@ Postgres без специфичных типов.
 from __future__ import annotations
 
 import enum
-from datetime import datetime, time
+from datetime import date, datetime, time
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, Time
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    Time,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -42,6 +52,20 @@ class DialogStateEnum(str, enum.Enum):
     decomposing = "decomposing"
 
 
+class TaskSource(str, enum.Enum):
+    plaud = "plaud"
+    manual = "manual"
+    decomposed = "decomposed"
+
+
+class TaskStatus(str, enum.Enum):
+    pending = "pending"
+    done = "done"
+    in_progress = "in_progress"
+    stuck = "stuck"
+    decomposed = "decomposed"
+
+
 class Group(Base):
     __tablename__ = "group"
 
@@ -53,6 +77,49 @@ class Group(Base):
     members: Mapped[list["Member"]] = relationship(
         back_populates="group", cascade="all, delete-orphan"
     )
+    weeks: Mapped[list["Week"]] = relationship(
+        back_populates="group", cascade="all, delete-orphan"
+    )
+
+
+class Week(Base):
+    __tablename__ = "week"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("group.id"))
+    start_date: Mapped[date] = mapped_column(Date)
+    plaud_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    group: Mapped["Group"] = relationship(back_populates="weeks")
+    tasks: Mapped[list["Task"]] = relationship(
+        back_populates="week", cascade="all, delete-orphan"
+    )
+
+
+class Task(Base):
+    __tablename__ = "task"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    member_id: Mapped[int] = mapped_column(ForeignKey("member.id"))
+    week_id: Mapped[int] = mapped_column(ForeignKey("week.id"))
+    text: Mapped[str] = mapped_column(Text)
+    source: Mapped[TaskSource] = mapped_column(
+        Enum(TaskSource, native_enum=False, length=16),
+        default=TaskSource.manual,
+    )
+    parent_task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("task.id"), nullable=True
+    )
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[TaskStatus] = mapped_column(
+        Enum(TaskStatus, native_enum=False, length=16),
+        default=TaskStatus.pending,
+    )
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    member: Mapped["Member"] = relationship(back_populates="tasks")
+    week: Mapped["Week"] = relationship(back_populates="tasks")
+    parent_task: Mapped["Task | None"] = relationship(remote_side="Task.id")
 
 
 class Member(Base):
@@ -82,6 +149,7 @@ class Member(Base):
     dialog_state: Mapped["DialogState | None"] = relationship(
         back_populates="member", uselist=False, cascade="all, delete-orphan"
     )
+    tasks: Mapped[list["Task"]] = relationship(back_populates="member")
 
 
 class DialogState(Base):
@@ -95,8 +163,9 @@ class DialogState(Base):
         default=DialogStateEnum.idle,
     )
     context_json: Mapped[str] = mapped_column(Text, default="{}")
-    # FK на week добавим на этапе 2, когда появится таблица week.
-    active_week_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    active_week_id: Mapped[int | None] = mapped_column(
+        ForeignKey("week.id"), nullable=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

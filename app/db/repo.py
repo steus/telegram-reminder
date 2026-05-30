@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import time
+from datetime import date, time
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
@@ -14,7 +14,11 @@ from app.db.models import (
     Group,
     InputMode,
     Member,
+    Task,
+    TaskSource,
+    TaskStatus,
     Visibility,
+    Week,
 )
 
 
@@ -139,3 +143,88 @@ async def update_member_settings(
         member.timezone = timezone
     await session.flush()
     return member
+
+
+async def get_or_create_current_week(
+    session: AsyncSession, group_id: int, *, start_date: date | None = None
+) -> Week:
+    """Текущая (последняя) неделя группы; если нет — создать."""
+    result = await session.execute(
+        select(Week)
+        .where(Week.group_id == group_id)
+        .order_by(Week.start_date.desc())
+        .limit(1)
+    )
+    week = result.scalar_one_or_none()
+    if week is None:
+        week = Week(group_id=group_id, start_date=start_date or date.today())
+        session.add(week)
+        await session.flush()
+    return week
+
+
+async def list_tasks_for_member_week(
+    session: AsyncSession, member_id: int, week_id: int
+) -> list[Task]:
+    result = await session.execute(
+        select(Task)
+        .where(Task.member_id == member_id, Task.week_id == week_id)
+        .order_by(Task.position)
+    )
+    return list(result.scalars().all())
+
+
+async def create_tasks(
+    session: AsyncSession,
+    *,
+    member_id: int,
+    week_id: int,
+    texts: list[str],
+    source: TaskSource = TaskSource.manual,
+    confirmed: bool = False,
+) -> list[Task]:
+    tasks: list[Task] = []
+    for idx, text in enumerate(texts):
+        task = Task(
+            member_id=member_id,
+            week_id=week_id,
+            text=text,
+            source=source,
+            position=idx,
+            confirmed=confirmed,
+            status=TaskStatus.pending,
+        )
+        session.add(task)
+        tasks.append(task)
+    await session.flush()
+    return tasks
+
+
+async def replace_tasks(
+    session: AsyncSession,
+    *,
+    member_id: int,
+    week_id: int,
+    texts: list[str],
+    source: TaskSource = TaskSource.manual,
+) -> list[Task]:
+    await session.execute(
+        delete(Task).where(Task.member_id == member_id, Task.week_id == week_id)
+    )
+    return await create_tasks(
+        session,
+        member_id=member_id,
+        week_id=week_id,
+        texts=texts,
+        source=source,
+        confirmed=False,
+    )
+
+
+async def set_tasks_confirmed(
+    session: AsyncSession, member_id: int, week_id: int, *, confirmed: bool = True
+) -> None:
+    tasks = await list_tasks_for_member_week(session, member_id, week_id)
+    for task in tasks:
+        task.confirmed = confirmed
+    await session.flush()
