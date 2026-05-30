@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# Secrets / runtime data
+.env
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Whisper artifacts
+models/
+*.bin
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

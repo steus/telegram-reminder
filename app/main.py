@@ -1,0 +1,44 @@
+"""Точка входа: бот (long polling) + планировщик в одном event loop (§4 ТЗ)."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+
+from aiogram import Bot, Dispatcher
+
+from app.bot.routers import common
+from app.config import settings
+from app.scheduler import create_scheduler
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+async def main() -> None:
+    bot = Bot(token=settings.telegram_bot_token)
+    dp = Dispatcher()
+    dp.include_router(common.router)
+
+    scheduler = create_scheduler()
+    scheduler.start()
+    logger.info("Scheduler started")
+
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        logger.info("Starting polling")
+        await dp.start_polling(bot)
+    finally:
+        scheduler.shutdown(wait=False)
+        await bot.session.close()
+        logger.info("Shutdown complete")
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Stopped by signal")

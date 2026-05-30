@@ -1,0 +1,35 @@
+[project]
+name = "bot-tracker"
+version = "0.1.0"
+description = "Telegram bot-tracker for weekly peer-accountability tasks of a business group"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram>=3.13",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "aiosqlite>=0.20",
+    "alembic>=1.13",
+    "apscheduler>=3.10,<4.0",
+    "pydantic-settings>=2.4",
+    "tzdata>=2024.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
