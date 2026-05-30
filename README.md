@@ -4,8 +4,8 @@ Telegram-бот для недельного peer-accountability трекинга
 Тон бота — поддерживающий напарник, а не контролёр. Полное ТЗ — в
 [`TZ_bot_tracker.md`](./TZ_bot_tracker.md), план сборки по этапам — в [`plan/`](./plan).
 
-Текущий статус: **этап 0 — каркас** (бот отвечает на `/start` и `/help`,
-БД с таблицами `group`/`member`, Alembic, Docker).
+Текущий статус: **этап 1 — онбординг и настройки** (`/start`, `/settings`,
+кнопочный онбординг, `dialog_state`, seed-скрипт).
 
 ## Стек
 
@@ -32,6 +32,18 @@ cp .env.example .env          # вписать TELEGRAM_BOT_TOKEN
 alembic upgrade head
 python -m app.main
 ```
+
+## Тестовый участник (этап 1)
+
+Узнай свой Telegram chat_id (например, через [@userinfobot](https://t.me/userinfobot))
+и создай запись в БД:
+
+```bash
+python scripts/seed_member.py --chat-id ВАШ_CHAT_ID --name "Ваше Имя"
+```
+
+Затем отправь боту `/start` — пройди онбординг кнопками. Незнакомый chat_id
+получит вежливый отказ без создания записи.
 
 ## Полезное
 

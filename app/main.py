@@ -6,8 +6,10 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
 
-from app.bot.routers import common
+from app.bot.routers import common, onboarding
+from app.bot.routers import settings as settings_router
 from app.config import settings
 from app.scheduler import create_scheduler
 
@@ -20,7 +22,9 @@ logger = logging.getLogger(__name__)
 
 async def main() -> None:
     bot = Bot(token=settings.telegram_bot_token)
-    dp = Dispatcher()
+    dp = Dispatcher(storage=MemoryStorage())
+    dp.include_router(onboarding.router)
+    dp.include_router(settings_router.router)
     dp.include_router(common.router)
 
     scheduler = create_scheduler()

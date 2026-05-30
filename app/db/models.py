@@ -1,8 +1,5 @@
 """SQLAlchemy-модели (§5 ТЗ).
 
-Этап 0: только `group` и `member` (+ их enum). Остальные таблицы (week, task,
-dialog_state, summary) добавляются на последующих этапах.
-
 Enum хранятся как VARCHAR (native_enum=False) — переносимо между SQLite и
 Postgres без специфичных типов.
 """
@@ -10,10 +7,11 @@ Postgres без специфичных типов.
 from __future__ import annotations
 
 import enum
-from datetime import time
+from datetime import datetime, time
 
-from sqlalchemy import Boolean, Enum, ForeignKey, Integer, String, Time
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, Time
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
 
 
 class Base(DeclarativeBase):
@@ -33,6 +31,15 @@ class Visibility(str, enum.Enum):
     group = "group"
     facilitator = "facilitator"
     private = "private"
+
+
+class DialogStateEnum(str, enum.Enum):
+    """Где участник в диалоге (§5 ТЗ)."""
+
+    idle = "idle"
+    confirming_tasks = "confirming_tasks"
+    checkin = "checkin"
+    decomposing = "decomposing"
 
 
 class Group(Base):
@@ -72,3 +79,26 @@ class Member(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     group: Mapped["Group"] = relationship(back_populates="members")
+    dialog_state: Mapped["DialogState | None"] = relationship(
+        back_populates="member", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class DialogState(Base):
+    __tablename__ = "dialog_state"
+
+    member_id: Mapped[int] = mapped_column(
+        ForeignKey("member.id"), primary_key=True
+    )
+    state: Mapped[DialogStateEnum] = mapped_column(
+        Enum(DialogStateEnum, native_enum=False, length=32),
+        default=DialogStateEnum.idle,
+    )
+    context_json: Mapped[str] = mapped_column(Text, default="{}")
+    # FK на week добавим на этапе 2, когда появится таблица week.
+    active_week_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    member: Mapped["Member"] = relationship(back_populates="dialog_state")
