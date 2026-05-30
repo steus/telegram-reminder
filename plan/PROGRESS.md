@@ -6,7 +6,7 @@
 - [x] **Этап 0** — Каркас и инфраструктура (`stage-0-skeleton.md`)
 - [x] **Этап 1** — Онбординг и настройки (`stage-1-onboarding.md`)
 - [x] **Этап 2** — Задачи (ручной режим) (`stage-2-manual-tasks.md`)
-- [ ] **Этап 3** — Чек-ин на кнопках (`stage-3-checkin.md`)
+- [x] **Этап 3** — Чек-ин на кнопках (`stage-3-checkin.md`)
 - [ ] **Этап 4** — LLM-слой и авто-извлечение (`stage-4-llm-extraction.md`)
 - [ ] **Этап 5** — Декомпозиция и голос (`stage-5-decompose-voice.md`)
 - [ ] **Этап 6** — Итоги и витрина (`stage-6-summary-sheets.md`)
@@ -20,5 +20,9 @@
 - **После этапа 2:** модели `week`/`task`, private-поток через `/setgoals` → ввод
   текстом → экран подтверждения (`tk:ok`/`tk:ed`) → `confirmed=true`. `/tasks`
   показывает список со статусами. Парсинг в `structure_goals()` — точка расширения
-  для LLM (этап 4). Сбор по расписанию — на этапе 3. Миграция `44a7a5ae9877`.
-  **Следующий этап (3):** лучше новый чат — контекст уже объёмный.
+  для LLM (этап 4). Миграция `44a7a5ae9877`.
+- **После этапа 3:** планировщик — **одна минутная джоба** `minute_tick` (не per-member):
+  в tz участника сверяет день/время чек-ина и (день+1)/время постановки задач.
+  Дедуп слотов в `dialog_state.context_json.scheduler_sent`. Чек-ин: `app/services/checkin.py`,
+  callback `t:{id}:{status}`, роутер `checkin`, `/checkin_now`. Затык — TODO в `on_stuck_status`.
+  Постановка private — `app/services/goal_setup.py`. **Этап 4:** в ту же `_tick` ветку `auto`.

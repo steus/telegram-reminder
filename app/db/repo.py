@@ -228,3 +228,25 @@ async def set_tasks_confirmed(
     for task in tasks:
         task.confirmed = confirmed
     await session.flush()
+
+
+async def get_task_by_id(session: AsyncSession, task_id: int) -> Task | None:
+    return await session.get(Task, task_id)
+
+
+async def update_task_status(
+    session: AsyncSession, task_id: int, status: TaskStatus
+) -> Task | None:
+    task = await get_task_by_id(session, task_id)
+    if task is None:
+        return None
+    task.status = status
+    await session.flush()
+    return task
+
+
+async def list_active_members(session: AsyncSession) -> list[Member]:
+    result = await session.execute(
+        select(Member).where(Member.is_active.is_(True)).order_by(Member.id)
+    )
+    return list(result.scalars().all())

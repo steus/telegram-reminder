@@ -4,7 +4,42 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from app.db.models import InputMode, Member, Visibility
+from app.db.models import InputMode, Member, Task, TaskStatus, Visibility
+
+# Статусы чек-ина (§6.4): callback_data = t:{task_id}:{status}, ≤64 байт
+CHECKIN_STATUS_BUTTONS: tuple[tuple[TaskStatus, str, str], ...] = (
+    (TaskStatus.done, "✅", "Сделал"),
+    (TaskStatus.in_progress, "🔄", "В работе"),
+    (TaskStatus.stuck, "⛔", "Затык"),
+)
+
+
+def checkin_callback_data(task_id: int, status: TaskStatus) -> str:
+    return f"t:{task_id}:{status.value}"
+
+
+def _checkin_button_label(
+    icon: str, label: str, status: TaskStatus, selected: TaskStatus | None
+) -> str:
+    if selected == status:
+        return f"• {icon} {label}"
+    return f"{icon} {label}"
+
+
+def kb_checkin_task_row(task: Task) -> list[InlineKeyboardButton]:
+    return [
+        InlineKeyboardButton(
+            text=_checkin_button_label(icon, label, status, task.status),
+            callback_data=checkin_callback_data(task.id, status),
+        )
+        for status, icon, label in CHECKIN_STATUS_BUTTONS
+    ]
+
+
+def kb_checkin_message(tasks: list[Task]) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[kb_checkin_task_row(task) for task in tasks]
+    )
 
 WEEKDAYS = (
     (0, "Пн"),
