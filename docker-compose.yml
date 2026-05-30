@@ -2,7 +2,7 @@ services:
   bot:
     build: .
     image: bot-tracker:latest
-    # Тот же uid/gid, что на хосте — иначе ./data (bind-mount) только для чтения в контейнере.
+    # UID/GID из .env (см. .env.example) — должны совпадать с id -u / id -g на хосте.
     user: "${UID:-1000}:${GID:-1000}"
     env_file:
       - .env

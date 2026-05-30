@@ -16,6 +16,8 @@ class DialogContext:
     step: str | None = None
     settings_field: str | None = None
     task_step: str | None = None  # collect | confirm | correct
+    facilitator_group_id: int | None = None
+    facilitator_pending: str | None = None
 
     @classmethod
     def from_json(cls, raw: str | None) -> DialogContext:
@@ -30,6 +32,8 @@ class DialogContext:
             step=data.get("step"),
             settings_field=data.get("settings_field"),
             task_step=data.get("task_step"),
+            facilitator_group_id=data.get("facilitator_group_id"),
+            facilitator_pending=data.get("facilitator_pending"),
         )
 
     def to_json(self) -> str:
@@ -77,3 +81,22 @@ class DialogContext:
 
     def clear_task_flow(self) -> None:
         self.task_step = None
+
+    def start_facilitator_paste(self, group_id: int) -> None:
+        self.facilitator_group_id = group_id
+        self.facilitator_pending = ""
+
+    def append_facilitator_paste(self, chunk: str) -> str:
+        chunk = chunk.strip()
+        if self.facilitator_pending:
+            self.facilitator_pending = f"{self.facilitator_pending}\n\n{chunk}"
+        else:
+            self.facilitator_pending = chunk
+        return self.facilitator_pending
+
+    def clear_facilitator_paste(self) -> None:
+        self.facilitator_group_id = None
+        self.facilitator_pending = None
+
+    def is_facilitator_pasting(self) -> bool:
+        return self.facilitator_group_id is not None

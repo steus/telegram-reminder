@@ -24,3 +24,8 @@ class TaskStates(StatesGroup):
     collecting = State()
     correcting = State()
     confirming = State()
+
+
+class FacilitatorStates(StatesGroup):
+    pasting_transcript = State()
+    confirm_resend = State()

@@ -8,7 +8,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from app.bot.routers import checkin, common, onboarding, tasks
+from app.bot.routers import checkin, common, facilitator, onboarding, tasks
 from app.bot.routers import settings as settings_router
 from app.config import settings
 from app.scheduler import create_scheduler
@@ -25,6 +25,7 @@ async def main() -> None:
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(onboarding.router)
     dp.include_router(settings_router.router)
+    dp.include_router(facilitator.router)
     dp.include_router(tasks.router)
     dp.include_router(checkin.router)
     dp.include_router(common.router)

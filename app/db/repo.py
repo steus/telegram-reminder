@@ -12,6 +12,7 @@ from app.db.models import (
     DialogState,
     DialogStateEnum,
     Group,
+    GroupFacilitator,
     InputMode,
     Member,
     Task,
@@ -40,19 +41,108 @@ async def get_group(session: AsyncSession, group_id: int) -> Group | None:
     return await session.get(Group, group_id)
 
 
+async def get_group_by_facilitator_chat_id(
+    session: AsyncSession, chat_id: str | int
+) -> Group | None:
+    """Группа, где chat_id — один из ведущих (group_facilitator)."""
+    result = await session.execute(
+        select(Group)
+        .join(GroupFacilitator, GroupFacilitator.group_id == Group.id)
+        .where(GroupFacilitator.telegram_chat_id == str(chat_id))
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+def parse_facilitator_chat_ids(
+    *values: str | None, default: str | None = None
+) -> list[str]:
+    """Разобрать chat_id ведущих: несколько аргументов и/или через запятую."""
+    ids: list[str] = []
+    for raw in values:
+        if not raw:
+            continue
+        for part in raw.split(","):
+            part = part.strip()
+            if part and part not in ids:
+                ids.append(part)
+    if not ids and default:
+        return [default]
+    return ids
+
+
+async def list_group_facilitator_chat_ids(
+    session: AsyncSession, group_id: int
+) -> list[str]:
+    result = await session.execute(
+        select(GroupFacilitator.telegram_chat_id)
+        .where(GroupFacilitator.group_id == group_id)
+        .order_by(GroupFacilitator.id)
+    )
+    return list(result.scalars().all())
+
+
+async def add_group_facilitator(
+    session: AsyncSession,
+    group_id: int,
+    telegram_chat_id: str | int,
+) -> GroupFacilitator | None:
+    """Добавить ведущего группы. None — уже был."""
+    chat_id = str(telegram_chat_id)
+    result = await session.execute(
+        select(GroupFacilitator).where(
+            GroupFacilitator.group_id == group_id,
+            GroupFacilitator.telegram_chat_id == chat_id,
+        )
+    )
+    if result.scalar_one_or_none() is not None:
+        return None
+
+    row = GroupFacilitator(group_id=group_id, telegram_chat_id=chat_id)
+    session.add(row)
+    await session.flush()
+    await _sync_group_primary_facilitator(session, group_id)
+    return row
+
+
+async def _sync_group_primary_facilitator(
+    session: AsyncSession, group_id: int
+) -> None:
+    """Денормализация: group.facilitator_chat_id = первый ведущий из списка."""
+    group = await session.get(Group, group_id)
+    if group is None:
+        return
+    ids = await list_group_facilitator_chat_ids(session, group_id)
+    if ids:
+        group.facilitator_chat_id = ids[0]
+        await session.flush()
+
+
 async def create_group(
     session: AsyncSession,
     *,
     name: str,
-    facilitator_chat_id: str,
+    facilitator_chat_id: str | None = None,
+    facilitator_chat_ids: list[str] | None = None,
     sheet_id: str | None = None,
 ) -> Group:
+    ids = facilitator_chat_ids or (
+        [facilitator_chat_id] if facilitator_chat_id else []
+    )
+    if not ids:
+        raise ValueError("At least one facilitator chat_id is required")
+
     group = Group(
         name=name,
-        facilitator_chat_id=str(facilitator_chat_id),
+        facilitator_chat_id=str(ids[0]),
         sheet_id=sheet_id,
     )
     session.add(group)
+    await session.flush()
+    for chat_id in ids:
+        session.add(
+            GroupFacilitator(group_id=group.id, telegram_chat_id=str(chat_id))
+        )
     await session.flush()
     return group
 
@@ -250,3 +340,56 @@ async def list_active_members(session: AsyncSession) -> list[Member]:
         select(Member).where(Member.is_active.is_(True)).order_by(Member.id)
     )
     return list(result.scalars().all())
+
+
+async def list_auto_members_for_group(
+    session: AsyncSession, group_id: int
+) -> list[Member]:
+    result = await session.execute(
+        select(Member).where(
+            Member.group_id == group_id,
+            Member.is_active.is_(True),
+            Member.input_mode == InputMode.auto,
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def list_group_member_names(
+    session: AsyncSession,
+    group_id: int,
+    *,
+    exclude_member_id: int | None = None,
+) -> list[str]:
+    """Имена активных участников группы (для атрибуции в LLM)."""
+    query = (
+        select(Member.full_name)
+        .where(Member.group_id == group_id, Member.is_active.is_(True))
+        .order_by(Member.id)
+    )
+    if exclude_member_id is not None:
+        query = query.where(Member.id != exclude_member_id)
+    result = await session.execute(query)
+    return list(result.scalars().all())
+
+
+async def update_week_plaud_url(
+    session: AsyncSession, week_id: int, plaud_url: str
+) -> Week | None:
+    week = await session.get(Week, week_id)
+    if week is None:
+        return None
+    week.plaud_url = plaud_url.strip()
+    await session.flush()
+    return week
+
+
+async def update_week_transcript(
+    session: AsyncSession, week_id: int, transcript_text: str
+) -> Week | None:
+    week = await session.get(Week, week_id)
+    if week is None:
+        return None
+    week.transcript_text = transcript_text.strip()
+    await session.flush()
+    return week

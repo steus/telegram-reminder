@@ -7,10 +7,15 @@
 - [x] **Этап 1** — Онбординг и настройки (`stage-1-onboarding.md`)
 - [x] **Этап 2** — Задачи (ручной режим) (`stage-2-manual-tasks.md`)
 - [x] **Этап 3** — Чек-ин на кнопках (`stage-3-checkin.md`)
-- [ ] **Этап 4** — LLM-слой и авто-извлечение (`stage-4-llm-extraction.md`)
+- [x] **Этап 4** — LLM-слой и авто-извлечение (`stage-4-llm-extraction.md`)
 - [ ] **Этап 5** — Декомпозиция и голос (`stage-5-decompose-voice.md`)
 - [ ] **Этап 6** — Итоги и витрина (`stage-6-summary-sheets.md`)
 - [ ] **Этап 7** — Прогресс и деплой (`stage-7-stats-deploy.md`)
+
+## Бэклог (обсудить позже)
+
+- **Web-UI для админов/ведущих** — управление группами, участниками, просмотр транскриптов
+  и задач помимо Telegram. Детали (стек, роли, MVP) — отдельная проработка.
 
 ## Заметки между этапами
 
@@ -26,3 +31,10 @@
   Дедуп слотов в `dialog_state.context_json.scheduler_sent`. Чек-ин: `app/services/checkin.py`,
   callback `t:{id}:{status}`, роутер `checkin`, `/checkin_now`. Затык — TODO в `on_stuck_status`.
   Постановка private — `app/services/goal_setup.py`. **Этап 4:** в ту же `_tick` ветку `auto`.
+- **После этапа 4:** `app/llm/` — `ask_llm` + фолбэк (тест `tests/test_llm_fallback.py`).
+  Plaud: `app/services/plaud.py` (API-каркас → scrape → ручная вставка). Транскрипт
+  хранится в `week.transcript_text`; ведущий — `/set_plaud_url`, `/paste_transcript`,
+  `/paste_done`, one-shot @-секции. Парсер «План действий»: `plaud_action_plan.py`
+  (без LLM). Несколько ведущих: `group_facilitator`. Auto-поток:
+  `app/services/auto_goal_setup.py`. Docker: `UID`/`GID` в `.env` для SQLite.
+  Миграции `a1b2c3d4e5f6`, `b2c3d4e5f6a7`.

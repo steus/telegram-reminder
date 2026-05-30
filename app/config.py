@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     llm_fallback_model: str | None = Field(None, alias="LLM_FALLBACK_MODEL")
     llm_fallback_api_key: str | None = Field(None, alias="LLM_FALLBACK_API_KEY")
 
+    # --- Plaud (этап 4) ---
+    plaud_api_key: str | None = Field(None, alias="PLAUD_API_KEY")
+    plaud_api_base_url: str | None = Field(None, alias="PLAUD_API_BASE_URL")
+
     # --- Голос / whisper (появляется на этапе 5) ---
     whisper_mode: str = Field("local", alias="WHISPER_MODE")
     whisper_cpp_path: str | None = Field(None, alias="WHISPER_CPP_PATH")

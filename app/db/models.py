@@ -19,6 +19,7 @@ from sqlalchemy import (
     String,
     Text,
     Time,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -80,6 +81,24 @@ class Group(Base):
     weeks: Mapped[list["Week"]] = relationship(
         back_populates="group", cascade="all, delete-orphan"
     )
+    facilitators: Mapped[list["GroupFacilitator"]] = relationship(
+        back_populates="group", cascade="all, delete-orphan"
+    )
+
+
+class GroupFacilitator(Base):
+    """Ведущие группы — один или несколько chat_id на группу."""
+
+    __tablename__ = "group_facilitator"
+    __table_args__ = (
+        UniqueConstraint("group_id", "telegram_chat_id", name="uq_group_facilitator"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("group.id"))
+    telegram_chat_id: Mapped[str] = mapped_column(String(64))
+
+    group: Mapped["Group"] = relationship(back_populates="facilitators")
 
 
 class Week(Base):
@@ -89,6 +108,7 @@ class Week(Base):
     group_id: Mapped[int] = mapped_column(ForeignKey("group.id"))
     start_date: Mapped[date] = mapped_column(Date)
     plaud_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    transcript_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     group: Mapped["Group"] = relationship(back_populates="weeks")
     tasks: Mapped[list["Task"]] = relationship(

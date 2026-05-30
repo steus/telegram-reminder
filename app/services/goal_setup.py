@@ -39,7 +39,7 @@ async def trigger_private_goal_setup(session: AsyncSession, member: Member) -> b
     return True
 
 
-async def send_scheduled_goal_setup(bot: Bot, member: Member) -> bool:
+async def send_scheduled_private_goal_setup(bot: Bot, member: Member) -> bool:
     async with get_session() as session:
         member_row = await get_member_by_id(session, member.id)
         if member_row is None or not member_row.is_active:
@@ -51,3 +51,12 @@ async def send_scheduled_goal_setup(bot: Bot, member: Member) -> bool:
     await bot.send_message(chat_id, GOAL_COLLECTION_PROMPT)
     logger.info("Goal setup prompt sent to member_id=%s", member.id)
     return True
+
+
+async def send_scheduled_goal_setup(bot: Bot, member: Member) -> bool:
+    """Плановая постановка задач: private или auto в зависимости от input_mode."""
+    if member.input_mode == InputMode.auto:
+        from app.services.auto_goal_setup import send_scheduled_auto_goal_setup
+
+        return await send_scheduled_auto_goal_setup(bot, member)
+    return await send_scheduled_private_goal_setup(bot, member)
