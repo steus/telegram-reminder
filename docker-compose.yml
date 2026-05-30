@@ -2,6 +2,8 @@ services:
   bot:
     build: .
     image: bot-tracker:latest
+    # Тот же uid/gid, что на хосте — иначе ./data (bind-mount) только для чтения в контейнере.
+    user: "${UID:-1000}:${GID:-1000}"
     env_file:
       - .env
     volumes:

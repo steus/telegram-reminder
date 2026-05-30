@@ -11,6 +11,7 @@ COPY pyproject.toml ./
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
+COPY scripts ./scripts
 COPY entrypoint.sh ./
 
 RUN pip install --upgrade pip && pip install . \

@@ -4,8 +4,8 @@ Telegram-бот для недельного peer-accountability трекинга
 Тон бота — поддерживающий напарник, а не контролёр. Полное ТЗ — в
 [`TZ_bot_tracker.md`](./TZ_bot_tracker.md), план сборки по этапам — в [`plan/`](./plan).
 
-Текущий статус: **этап 2 — задачи (ручной режим)** (`/setgoals`, `/tasks`,
-экран подтверждения, модели `week`/`task`).
+Текущий статус: **этап 3 — чек-ин и планировщик** (`/setgoals`, `/tasks`,
+`/checkin_now`, кнопки статусов, APScheduler).
 
 ## Стек
 
@@ -18,6 +18,7 @@ APScheduler, pydantic-settings. Один процесс: бот + планиро
 
 ```bash
 cp .env.example .env          # вписать TELEGRAM_BOT_TOKEN тестового бота
+export UID=$(id -u) GID=$(id -g)   # права на ./data для SQLite в контейнере
 docker compose up --build
 ```
 
@@ -39,6 +40,10 @@ python -m app.main
 и создай запись в БД:
 
 ```bash
+# Docker (после docker compose up --build):
+docker compose exec bot python scripts/seed_member.py --chat-id ВАШ_CHAT_ID --name "Ваше Имя"
+
+# или с хоста (venv):
 python scripts/seed_member.py --chat-id ВАШ_CHAT_ID --name "Ваше Имя"
 ```
 
@@ -55,7 +60,7 @@ python scripts/seed_member.py --chat-id ВАШ_CHAT_ID --name "Ваше Имя"
 /tasks      # посмотреть текущий список
 ```
 
-Планировщик, который сам инициирует сбор целей, появится на этапе 3.
+Для ручного чек-ина: `/checkin_now`. По расписанию — день/время из онбординга (`/settings`).
 
 ## Полезное
 
