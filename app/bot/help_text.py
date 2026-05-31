@@ -1,0 +1,54 @@
+"""Текст /help — раздельно для участника и ведущего.
+
+Единообразие: в текстах «задачи», в именах команд — *_goals.
+"""
+
+from __future__ import annotations
+
+from app.bot.command_names import (
+    CMD_GROUP_PASTE_DONE,
+    CMD_GROUP_PASTE_TRANSCRIPT,
+    CMD_GROUP_SET_PLAUD,
+    CMD_GROUP_SYNC_GOALS,
+    CMD_GROUP_VIEW_GOALS,
+    CMD_SET_MY_GOALS,
+    CMD_SYNC_MY_GOALS,
+    CMD_VIEW_MY_GOALS,
+)
+from app.db.repo import get_group_by_facilitator_chat_id
+from app.db.session import get_session
+
+
+async def build_help_text(chat_id: int) -> str:
+    lines = [
+        "Задачи:",
+        f"/{CMD_SET_MY_GOALS} — задать задачи на неделю (режим private)",
+        f"/{CMD_VIEW_MY_GOALS} — посмотреть задачи и статусы",
+        f"/{CMD_SYNC_MY_GOALS} — обновить задачи в таблице (вкладка «Прогресс»)",
+        "",
+        "Чек-ин и настройки:",
+        "/checkin_now — чек-ин вручную (для разработки)",
+        "/settings — видимость, время, пинг",
+        "/stats — прогресс по неделям",
+        "/start — онбординг",
+        "/help — эта справка",
+    ]
+
+    async with get_session() as session:
+        group = await get_group_by_facilitator_chat_id(session, chat_id)
+    if group is not None:
+        lines.extend(
+            [
+                "",
+                "Ведущий — задачи из транскрипта (Plaud):",
+                f"/{CMD_GROUP_PASTE_TRANSCRIPT} — начать вставку «План действий»",
+                f"/{CMD_GROUP_PASTE_DONE} — завершить многочастную вставку",
+                f"/{CMD_GROUP_SET_PLAUD} — сохранить ссылку на Plaud",
+                "",
+                "Ведущий — задачи группы:",
+                f"/{CMD_GROUP_VIEW_GOALS} — задачи и статусы всех участников",
+                f"/{CMD_GROUP_SYNC_GOALS} — обновить задачи всех в таблице",
+            ]
+        )
+
+    return "\n".join(lines)

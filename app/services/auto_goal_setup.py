@@ -1,4 +1,4 @@
-"""Плановый запуск auto-извлечения задач из транскрипта (§6.2, auto-ветка)."""
+"""Плановый запуск auto-извлечения goals из транскрипта (§6.2, auto-ветка)."""
 
 from __future__ import annotations
 
@@ -31,21 +31,21 @@ from app.services.plaud import PlaudManualRequired, fetch_transcript
 
 logger = logging.getLogger(__name__)
 
-NO_TASKS_MESSAGE = (
+NO_GOALS_MESSAGE = (
     "Я просмотрел транскрипт, но не нашёл задач, которые можно уверенно "
-    "приписать тебе. Если что-то упустил — напиши список вручную через /setgoals "
+    "приписать тебе. Если что-то упустил — напиши список вручную через /set_my_goals "
     "или попроси ведущего проверить транскрипт."
 )
 
-REASON_NO_TASKS = "задачи в транскрипте не найдены"
+REASON_NO_GOALS = "задачи в транскрипте не найдены"
 REASON_NOT_ONBOARDED = "не завершил онбординг"
 REASON_ALREADY_CONFIRMING = "уже на экране подтверждения (не обновлено — выбери «Разослать участникам» при повторной вставке)"
 
 
 @dataclass
 class AutoExtractionResult:
-    sent_with_tasks: list[str] = field(default_factory=list)
-    without_tasks: list[tuple[str, str]] = field(default_factory=list)
+    sent_with_goals: list[str] = field(default_factory=list)
+    without_goals: list[tuple[str, str]] = field(default_factory=list)
     no_auto_members: bool = False
 
 
@@ -53,23 +53,23 @@ def format_facilitator_report(result: AutoExtractionResult, *, saved_only: bool 
     if saved_only:
         return (
             "Транскрипт сохранён. Участникам ничего не отправлено.\n"
-            "Чтобы разослать позже — снова /paste_transcript (текст можно тот же) "
+            "Чтобы разослать позже — снова /group_paste_transcript (текст можно тот же) "
             "и выбери «Разослать участникам»."
         )
 
     lines = ["Транскрипт сохранён."]
     if result.no_auto_members:
         lines.append("Нет участников в режиме auto — некому отправлять.")
-    elif result.sent_with_tasks:
-        names = ", ".join(result.sent_with_tasks)
+    elif result.sent_with_goals:
+        names = ", ".join(result.sent_with_goals)
         lines.append(
-            f"Экран подтверждения отправлен ({len(result.sent_with_tasks)}): {names}."
+            f"Экран подтверждения отправлен ({len(result.sent_with_goals)}): {names}."
         )
-    if result.without_tasks:
+    if result.without_goals:
         lines.append("Не удалось назначить задачи:")
-        for name, reason in result.without_tasks:
+        for name, reason in result.without_goals:
             lines.append(f"  • {name} — {reason}")
-    elif not result.no_auto_members and not result.sent_with_tasks:
+    elif not result.no_auto_members and not result.sent_with_goals:
         lines.append("Никому не отправлено — проверь режим auto и онбординг участников.")
     return "\n".join(lines)
 
@@ -77,7 +77,7 @@ def format_facilitator_report(result: AutoExtractionResult, *, saved_only: bool 
 async def has_pending_auto_confirmations(
     session: AsyncSession, group_id: int, week_id: int
 ) -> bool:
-    """Есть ли auto-участники на экране подтверждения задач этой недели."""
+    """Есть ли auto-участники на экране подтверждения goals этой недели."""
     for member in await list_auto_members_for_group(session, group_id):
         dialog = await get_or_create_dialog_state(session, member.id)
         if dialog.active_week_id != week_id:
@@ -110,7 +110,7 @@ async def trigger_auto_goal_setup(
     *,
     force: bool = False,
 ) -> tuple[bool, str | None]:
-    """Извлечь задачи из транскрипта. (True, reason) — обработан; (False, reason) — пропуск."""
+    """Извлечь goals из транскрипта. (True, reason) — обработан; (False, reason) — пропуск."""
     if member.input_mode != InputMode.auto:
         return False, "not_auto"
 
@@ -146,11 +146,11 @@ async def trigger_auto_goal_setup(
         )
         ctx.show_task_confirmation()
         await update_dialog_context(session, member.id, ctx.to_json())
-        return True, "tasks_found"
+        return True, "goals_found"
 
     ctx.start_task_collection()
     await update_dialog_context(session, member.id, ctx.to_json())
-    return True, "no_tasks"
+    return True, "no_goals"
 
 
 async def _notify_member(
@@ -161,11 +161,11 @@ async def _notify_member(
     reason: str,
 ) -> None:
     chat_id = member.telegram_chat_id
-    if reason == "no_tasks":
-        await bot.send_message(chat_id, NO_TASKS_MESSAGE)
-        logger.info("Auto goal setup: no tasks for member_id=%s", member.id)
+    if reason == "no_goals":
+        await bot.send_message(chat_id, NO_GOALS_MESSAGE)
+        logger.info("Auto goal setup: no goals for member_id=%s", member.id)
         return
-    if reason != "tasks_found":
+    if reason != "goals_found":
         return
     tasks = await list_tasks_for_member_week(session, member.id, week.id)
     await bot.send_message(
@@ -183,7 +183,7 @@ async def run_auto_extraction_for_group(
     *,
     force: bool = False,
 ) -> AutoExtractionResult:
-    """Извлечь задачи для всех auto-участников и разослать экран подтверждения."""
+    """Извлечь goals для всех auto-участников и разослать экран подтверждения."""
     week = await get_or_create_current_week(session, group_id)
     members = await list_auto_members_for_group(session, group_id)
     result = AutoExtractionResult(no_auto_members=not members)
@@ -194,18 +194,18 @@ async def run_auto_extraction_for_group(
         )
         if not ok:
             if reason == "not_onboarded":
-                result.without_tasks.append((member.full_name, REASON_NOT_ONBOARDED))
+                result.without_goals.append((member.full_name, REASON_NOT_ONBOARDED))
             elif reason == "already_confirming":
-                result.without_tasks.append((member.full_name, REASON_ALREADY_CONFIRMING))
+                result.without_goals.append((member.full_name, REASON_ALREADY_CONFIRMING))
             continue
 
-        if reason == "no_tasks":
+        if reason == "no_goals":
             await _notify_member(bot, session, member, week, reason)
-            result.without_tasks.append((member.full_name, REASON_NO_TASKS))
+            result.without_goals.append((member.full_name, REASON_NO_GOALS))
             continue
-        if reason == "tasks_found":
+        if reason == "goals_found":
             await _notify_member(bot, session, member, week, reason)
-            result.sent_with_tasks.append(member.full_name)
+            result.sent_with_goals.append(member.full_name)
 
     return result
 
@@ -232,4 +232,4 @@ async def send_scheduled_auto_goal_setup(bot: Bot, member: Member) -> bool:
             return False
 
         await _notify_member(bot, session, member_row, week, reason or "")
-        return reason in ("tasks_found", "no_tasks")
+        return reason in ("goals_found", "no_goals")

@@ -65,6 +65,21 @@ def test_message_has_audio_voice_and_video_note() -> None:
     assert voice.message_has_audio(text_msg) is False
 
 
+def test_is_whisper_hallucination() -> None:
+    assert voice.is_whisper_hallucination("С вами был Игорь Негода. (черновик)")
+    assert voice.is_whisper_hallucination("  ")
+    assert voice.is_whisper_hallucination("Удачи!")
+    assert voice.is_whisper_hallucination("Удачи!", duration=8)
+    assert not voice.is_whisper_hallucination("Сделал задачу по найму")
+    assert voice.validate_transcription("Подписывайтесь на канал") is None
+    assert voice.validate_transcription("Удачи!", duration=5) is None
+    assert voice.validate_transcription("  готово  ") == "готово"
+    assert (
+        voice.validate_transcription("Сделал первую задачу, вторая в работе", duration=5)
+        == "Сделал первую задачу, вторая в работе"
+    )
+
+
 @pytest.mark.asyncio
 async def test_transcribe_file_uses_override(tmp_path: Path) -> None:
     audio = tmp_path / "test.ogg"

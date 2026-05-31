@@ -8,9 +8,12 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
+from app.bot.commands import register_bot_commands
 from app.bot.routers import checkin, common, decompose, facilitator, onboarding, tasks
 from app.bot.routers import settings as settings_router
 from app.config import settings
+from app.db.repo import list_all_facilitator_chat_ids
+from app.db.session import get_session
 from app.scheduler import create_scheduler
 
 logging.basicConfig(
@@ -36,6 +39,10 @@ async def main() -> None:
     logger.info("Scheduler started")
 
     try:
+        async with get_session() as session:
+            facilitator_ids = await list_all_facilitator_chat_ids(session)
+        await register_bot_commands(bot, facilitator_chat_ids=facilitator_ids)
+
         await bot.delete_webhook(drop_pending_updates=True)
         logger.info("Starting polling")
         await dp.start_polling(bot)

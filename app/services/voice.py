@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -30,10 +31,117 @@ VOICE_TOO_LONG = (
 VOICE_TRANSCRIBE_FAILED = (
     "Не получилось расшифровать аудио. Напиши текстом, пожалуйста."
 )
+VOICE_NOTHING_HEARD = (
+    "Похоже, в записи тишина или я ничего не разобрал — "
+    "напиши текстом или запиши голос ещё раз."
+)
 AUDIO_NOT_IN_DIALOG = (
     "Слышу аудио, но сейчас не жду его здесь. "
-    "Для целей — /setgoals, для чек-ина — /checkin_now."
+    "Для своих задач — /set_my_goals, для чек-ина — /checkin_now."
 )
+
+# Типичные «галлюцинации» Whisper на тишине / шуме (обучающие субтитры, аутро).
+_HALLUCINATION_RE = re.compile(
+    r"|".join(
+        (
+            r"с\s+вами\s+был",
+            r"подписывайтесь",
+            r"спасибо\s+за\s+просмотр",
+            r"продолжение\s+следует",
+            r"субтитр",
+            r"\(черновик\)",
+            r"\bчерновик\s*$",
+            r"thank\s+you\s+for\s+watching",
+            r"\bsubscribe\b",
+            r"amara\.org",
+            r"tune2go",
+            r"^\s*\.+\s*$",
+        )
+    ),
+    re.IGNORECASE,
+)
+
+# Короткие «пустые» фразы на тишине (часто voice и video note).
+_SHORT_FILLER_RE = re.compile(
+    r"^("
+    r"удачи"
+    r"|пока"
+    r"|спасибо"
+    r"|благодарю"
+    r"|до свидания"
+    r"|всем пока"
+    r"|удачи вам"
+    r"|удачи всем"
+    r"|хорошего дня"
+    r"|хорошего вечера"
+    r"|всего доброго"
+    r")(?:[!.,…\s]+)?$",
+    re.IGNORECASE,
+)
+
+# Слишком короткая запись без смысла — не гоняем в whisper (часто тишина).
+_MIN_VOICE_SECONDS = 1
+# На короткой записи односложная «галлюцинация» без контекста задач.
+_SHORT_CLIP_MAX_SECONDS = 20
+
+
+class EmptyTranscriptionError(Exception):
+    """Пустой результат или типичная галлюцинация на тишине."""
+
+
+def is_whisper_hallucination(
+    text: str,
+    *,
+    duration: int | None = None,
+) -> bool:
+    normalized = " ".join(text.split())
+    if not normalized:
+        return True
+    if _HALLUCINATION_RE.search(normalized) is not None:
+        return True
+    if _SHORT_FILLER_RE.match(normalized) is not None:
+        return True
+    if (
+        duration is not None
+        and duration <= _SHORT_CLIP_MAX_SECONDS
+        and len(normalized) <= 40
+        and _SHORT_FILLER_RE.match(normalized) is None
+        and not _looks_like_task_update(normalized)
+    ):
+        # Очень короткий бессодержательный ответ на коротком клипе (типичный шум).
+        if len(normalized.split()) <= 2 and normalized.endswith(("!", ".", "…")):
+            return True
+    return False
+
+
+def _looks_like_task_update(text: str) -> bool:
+    """Есть признаки содержательного ответа по задачам, а не случайного шума."""
+    lower = text.lower()
+    hints = (
+        "задач",
+        "сделал",
+        "готов",
+        "застрял",
+        "затык",
+        "в работе",
+        "не успел",
+        "не вышло",
+        "недел",
+        "план",
+    )
+    return any(h in lower for h in hints)
+
+
+def validate_transcription(
+    text: str,
+    *,
+    duration: int | None = None,
+) -> str | None:
+    """Вернуть очищенный текст или None, если это шум/галлюцинация."""
+    cleaned = text.strip()
+    if not cleaned or is_whisper_hallucination(cleaned, duration=duration):
+        return None
+    return cleaned
 
 
 def set_transcribe_override(fn: object | None) -> None:
@@ -170,6 +278,8 @@ def _run_whisper_local(audio_path: Path) -> str:
         "-l",
         "ru",
         "-nt",
+        "-nth",
+        "0.65",
     ]
     result = subprocess.run(
         cmd,
@@ -236,18 +346,29 @@ async def transcribe_message_audio(bot: Bot, message: Message) -> str | None:
     kind, file_id, duration, suffix = source
     if not duration_ok(duration):
         return None
+    if duration is not None and duration < _MIN_VOICE_SECONDS:
+        raise EmptyTranscriptionError()
 
     audio_path: Path | None = None
     try:
         audio_path = await download_telegram_file(bot, file_id, suffix_hint=suffix)
-        text = await transcribe_file(audio_path)
+        raw = await transcribe_file(audio_path)
+        validated = validate_transcription(raw, duration=duration)
+        if validated is None:
+            logger.info(
+                "Rejected transcription for %s (%ss): %r",
+                kind,
+                duration,
+                raw[:80],
+            )
+            raise EmptyTranscriptionError()
         logger.info(
             "Transcribed %s (%ss): %d chars",
             kind,
             duration,
-            len(text),
+            len(validated),
         )
-        return text
+        return validated
     finally:
         if audio_path is not None:
             audio_path.unlink(missing_ok=True)

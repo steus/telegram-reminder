@@ -22,6 +22,9 @@ class DialogContext:
     checkin_messages: list[dict[str, str]] | None = None
     decompose_task_id: int | None = None
     decompose_steps: list[str] | None = None
+    pending_summary_week_id: int | None = None
+    pending_summary_member_text: str | None = None
+    pending_summary_facilitator_text: str | None = None
 
     @classmethod
     def from_json(cls, raw: str | None) -> DialogContext:
@@ -41,6 +44,9 @@ class DialogContext:
             checkin_messages=_parse_message_list(data.get("checkin_messages")),
             decompose_task_id=data.get("decompose_task_id"),
             decompose_steps=_parse_str_list(data.get("decompose_steps")),
+            pending_summary_week_id=data.get("pending_summary_week_id"),
+            pending_summary_member_text=data.get("pending_summary_member_text"),
+            pending_summary_facilitator_text=data.get("pending_summary_facilitator_text"),
         )
 
     def to_json(self) -> str:
@@ -130,6 +136,25 @@ class DialogContext:
     def clear_decompose(self) -> None:
         self.decompose_task_id = None
         self.decompose_steps = None
+
+    def set_pending_summary(
+        self,
+        *,
+        week_id: int,
+        member_text: str,
+        facilitator_text: str,
+    ) -> None:
+        self.pending_summary_week_id = week_id
+        self.pending_summary_member_text = member_text
+        self.pending_summary_facilitator_text = facilitator_text
+
+    def clear_pending_summary(self) -> None:
+        self.pending_summary_week_id = None
+        self.pending_summary_member_text = None
+        self.pending_summary_facilitator_text = None
+
+    def has_pending_summary(self) -> bool:
+        return self.pending_summary_week_id is not None
 
 
 def _parse_message_list(raw: object) -> list[dict[str, str]] | None:

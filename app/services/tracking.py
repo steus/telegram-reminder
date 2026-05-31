@@ -36,6 +36,7 @@ class TrackingResult:
     updated_tasks: list[tuple[int, TaskStatus]]
     report_ready: bool
     newly_stuck_task_ids: list[int]
+    raw_llm: str | None = None
 
 
 def format_tasks_for_prompt(tasks: list[Task]) -> str:
@@ -154,4 +155,5 @@ async def process_checkin_message(
         updated_tasks=applied,
         report_ready=report_ready,
         newly_stuck_task_ids=newly_stuck,
+        raw_llm=raw if report_ready else None,
     )

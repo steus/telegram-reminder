@@ -9,8 +9,18 @@ from aiogram.filters import BaseFilter, Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from app.bot.command_names import (
+    CMD_GROUP_PASTE_DONE,
+    CMD_GROUP_PASTE_TRANSCRIPT,
+    CMD_GROUP_SET_PLAUD,
+    CMD_GROUP_SYNC_GOALS,
+    CMD_GROUP_VIEW_GOALS,
+    CMD_SET_MY_GOALS,
+)
+from app.services.sheet_sync import sync_group_goals_to_sheet
 from app.bot.dialog_context import DialogContext
 from app.bot.states import FacilitatorStates
+from app.db.models import DialogStateEnum
 from app.db.repo import (
     get_group_by_facilitator_chat_id,
     get_member_by_chat_id,
@@ -20,6 +30,7 @@ from app.db.repo import (
     update_week_plaud_url,
     update_week_transcript,
 )
+from app.services.group_goals_view import build_group_goals_report
 from app.db.session import get_session
 from app.services.auto_goal_setup import (
     AutoExtractionResult,
@@ -189,16 +200,56 @@ async def _finalize_transcript(
 
 
 class FacilitatorText(BaseFilter):
-    """Текст от ведущего (не команда)."""
+    """Текст от ведущего (не команда), если не в другом диалоге участника."""
 
     async def __call__(self, message: Message) -> bool:
         if not message.text or message.text.startswith("/"):
             return False
         group = await _facilitator_group(message.chat.id)
-        return group is not None
+        if group is None:
+            return False
+        # Ведущий часто совпадает с участником: не перехватывать чек-ин, цели, декомпозицию.
+        async with get_session() as session:
+            member = await get_member_by_chat_id(session, message.chat.id)
+            if member is not None:
+                dialog = await get_or_create_dialog_state(session, member.id)
+                if dialog.state in (
+                    DialogStateEnum.confirming_tasks,
+                    DialogStateEnum.checkin,
+                    DialogStateEnum.decomposing,
+                ):
+                    return False
+        return True
 
 
-@router.message(Command("set_plaud_url"))
+@router.message(Command(CMD_GROUP_SYNC_GOALS))
+async def cmd_group_sync_goals(message: Message) -> None:
+    group = await _facilitator_group(message.chat.id)
+    if group is None:
+        await message.answer(_not_facilitator_text(message.chat.id))
+        return
+
+    async with get_session() as session:
+        result = await sync_group_goals_to_sheet(session, group)
+
+    await message.answer(result.message)
+
+
+@router.message(Command(CMD_GROUP_VIEW_GOALS))
+async def cmd_group_view_goals(message: Message) -> None:
+    group = await _facilitator_group(message.chat.id)
+    if group is None:
+        await message.answer(_not_facilitator_text(message.chat.id))
+        return
+
+    async with get_session() as session:
+        week = await get_or_create_current_week(session, group.id)
+        report = await build_group_goals_report(session, group, week)
+
+    await message.answer(report)
+
+
+@router.message(Command(CMD_GROUP_SET_PLAUD))
 async def cmd_set_plaud_url(message: Message, command: CommandObject) -> None:
     group = await _facilitator_group(message.chat.id)
     if group is None:
@@ -207,7 +258,7 @@ async def cmd_set_plaud_url(message: Message, command: CommandObject) -> None:
 
     url = (command.args or "").strip()
     if not url:
-        await message.answer("Укажи ссылку: /set_plaud_url https://...")
+        await message.answer(f"Укажи ссылку: /{CMD_GROUP_SET_PLAUD} https://...")
         return
 
     async with get_session() as session:
@@ -218,7 +269,7 @@ async def cmd_set_plaud_url(message: Message, command: CommandObject) -> None:
     await message.answer(f"Ссылка на транскрипт сохранена для недели с {week_label}.")
 
 
-@router.message(Command("paste_transcript", "paste_transacipt"))
+@router.message(Command(CMD_GROUP_PASTE_TRANSCRIPT))
 async def cmd_paste_transcript(message: Message, state: FSMContext) -> None:
     group = await _facilitator_group(message.chat.id)
     if group is None:
@@ -240,19 +291,22 @@ async def cmd_paste_transcript(message: Message, state: FSMContext) -> None:
         message.chat.id, state, group_id=group.id, pending="", ctx=ctx, member_id=member_id
     )
     await message.answer(
-        "Жду текст. Можно так:\n\n"
-        "1) Весь «План действий» одним сообщением → сразу обработаю.\n"
-        "2) Несколькими частями (@Speaker 1, потом @Степан …) → в конце /paste_done.\n"
-        "3) Только свою секцию (@Степан …) без /paste_transcript — тоже сработает."
+        "Жду текст «Плана действий». Можно так:\n\n"
+        "1) Весь план одним сообщением (несколько @-секций) → сразу обработаю.\n"
+        "2) По частям (@Speaker 1, потом @Степан …) → в конце /"
+        f"{CMD_GROUP_PASTE_DONE}.\n"
+        f"3) Одна @-секция без /{CMD_GROUP_PASTE_TRANSCRIPT} — тоже сработает "
+        f"(если не вводишь свои задачи через /{CMD_SET_MY_GOALS})."
     )
 
 
-@router.message(Command("paste_done"))
+@router.message(Command(CMD_GROUP_PASTE_DONE))
 async def cmd_paste_done(message: Message, state: FSMContext) -> None:
     group_id, pending, ctx, member_id = await _load_paste_context(message.chat.id, state)
     if group_id is None or not pending:
         await message.answer(
-            "Нет накопленного текста. Сначала /paste_transcript и пришли части плана."
+            f"Нет накопленного текста. Сначала /{CMD_GROUP_PASTE_TRANSCRIPT} "
+            f"и пришли части плана, затем /{CMD_GROUP_PASTE_DONE}."
         )
         return
     await _finalize_transcript(
@@ -292,8 +346,9 @@ async def handle_facilitator_transcript_text(message: Message, state: FSMContext
 
     if not in_paste_mode:
         await message.answer(
-            "Чтобы вставить транскрипт, сначала /paste_transcript "
-            "или пришли одним сообщением блок с @-заголовками."
+            f"Это похоже на транскрипт встречи. Для группы — /{CMD_GROUP_PASTE_TRANSCRIPT} "
+            "или один блок с несколькими @-заголовками.\n\n"
+            f"Для своих задач — /{CMD_SET_MY_GOALS} и список строк (без @)."
         )
         return
 
@@ -323,7 +378,7 @@ async def handle_facilitator_transcript_text(message: Message, state: FSMContext
         member_id=member_id,
     )
 
-    # После /paste_transcript: одна @-секция — ждём остальные; несколько — полный план одним сообщением
+    # После group_paste_transcript: одна @-секция — ждём остальные; несколько — полный план
     if not pending and count_action_plan_sections(combined) >= 2:
         await _finalize_transcript(
             message,
@@ -337,7 +392,7 @@ async def handle_facilitator_transcript_text(message: Message, state: FSMContext
 
     await message.answer(
         f"Принял ({len(combined)} символов). "
-        "Пришли следующие @-секции, затем /paste_done."
+        f"Пришли следующие @-секции, затем /{CMD_GROUP_PASTE_DONE}."
     )
 
 
@@ -349,7 +404,9 @@ async def cb_facilitator_resend_yes(callback: CallbackQuery, state: FSMContext) 
     data = await state.get_data()
     group_id = data.get("facilitator_group_id")
     if group_id is None:
-        await callback.answer("Сессия истекла — начни с /paste_transcript", show_alert=True)
+        await callback.answer(
+            f"Сессия истекла — начни с /{CMD_GROUP_PASTE_TRANSCRIPT}", show_alert=True
+        )
         return
 
     async with get_session() as session:

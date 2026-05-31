@@ -15,6 +15,8 @@ from app.db.models import (
     GroupFacilitator,
     InputMode,
     Member,
+    SharedScope,
+    Summary,
     Task,
     TaskSource,
     TaskStatus,
@@ -80,6 +82,12 @@ async def list_group_facilitator_chat_ids(
         .order_by(GroupFacilitator.id)
     )
     return list(result.scalars().all())
+
+
+async def list_all_facilitator_chat_ids(session: AsyncSession) -> list[int]:
+    """Все chat_id ведущих — для меню команд Telegram."""
+    result = await session.execute(select(GroupFacilitator.telegram_chat_id))
+    return [int(chat_id) for chat_id in result.scalars().all()]
 
 
 async def add_group_facilitator(
@@ -342,6 +350,17 @@ async def list_active_members(session: AsyncSession) -> list[Member]:
     return list(result.scalars().all())
 
 
+async def list_active_members_for_group(
+    session: AsyncSession, group_id: int
+) -> list[Member]:
+    result = await session.execute(
+        select(Member)
+        .where(Member.group_id == group_id, Member.is_active.is_(True))
+        .order_by(Member.id)
+    )
+    return list(result.scalars().all())
+
+
 async def list_auto_members_for_group(
     session: AsyncSession, group_id: int
 ) -> list[Member]:
@@ -412,6 +431,38 @@ async def get_or_create_next_week(
         session.add(week)
         await session.flush()
     return week
+
+
+async def create_summary(
+    session: AsyncSession,
+    *,
+    member_id: int,
+    week_id: int,
+    member_text: str,
+    facilitator_text: str,
+    shared_scope: SharedScope,
+) -> Summary:
+    row = Summary(
+        member_id=member_id,
+        week_id=week_id,
+        member_text=member_text,
+        facilitator_text=facilitator_text,
+        shared_scope=shared_scope,
+    )
+    session.add(row)
+    await session.flush()
+    return row
+
+
+async def list_summaries_for_member(
+    session: AsyncSession, member_id: int
+) -> list[Summary]:
+    result = await session.execute(
+        select(Summary)
+        .where(Summary.member_id == member_id)
+        .order_by(Summary.created_at.desc())
+    )
+    return list(result.scalars().all())
 
 
 async def create_decomposed_subtasks(

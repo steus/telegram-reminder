@@ -2,7 +2,7 @@
 
 from app.services.auto_goal_setup import (
     AutoExtractionResult,
-    REASON_NO_TASKS,
+    REASON_NO_GOALS,
     REASON_NOT_ONBOARDED,
     format_facilitator_report,
 )
@@ -10,13 +10,13 @@ from app.services.auto_goal_setup import (
 
 def test_format_facilitator_report_with_assignments() -> None:
     result = AutoExtractionResult(
-        sent_with_tasks=["Stepan Teus"],
-        without_tasks=[("Maria", REASON_NO_TASKS)],
+        sent_with_goals=["Stepan Teus"],
+        without_goals=[("Maria", REASON_NO_GOALS)],
     )
     text = format_facilitator_report(result)
     assert "Stepan Teus" in text
     assert "Maria" in text
-    assert REASON_NO_TASKS in text
+    assert REASON_NO_GOALS in text
 
 
 def test_format_facilitator_report_saved_only() -> None:
@@ -32,7 +32,7 @@ def test_format_facilitator_report_no_auto() -> None:
 
 def test_format_facilitator_report_not_onboarded() -> None:
     result = AutoExtractionResult(
-        without_tasks=[("Ivan", REASON_NOT_ONBOARDED)],
+        without_goals=[("Ivan", REASON_NOT_ONBOARDED)],
     )
     text = format_facilitator_report(result)
     assert "Ivan" in text

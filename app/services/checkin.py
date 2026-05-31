@@ -32,7 +32,7 @@ CHECKIN_INTRO = (
 
 CHECKIN_EMPTY = (
     "На эту неделю задач пока нет — когда появятся, я напомню перед встречей. "
-    "Добавить цели можно через /setgoals."
+    "Добавить свои — /set_my_goals."
 )
 
 CHECKIN_STATUSES = frozenset(

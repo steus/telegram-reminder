@@ -63,6 +63,27 @@ def kb_decompose_offer(task_id: int) -> InlineKeyboardMarkup:
     )
 
 
+def summary_send_callback(accept: bool) -> str:
+    return f"sm:yn:{'yes' if accept else 'no'}"
+
+
+def kb_summary_send() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Да, отправить",
+                    callback_data=summary_send_callback(True),
+                ),
+                InlineKeyboardButton(
+                    text="Нет, оставить у себя",
+                    callback_data=summary_send_callback(False),
+                ),
+            ]
+        ]
+    )
+
+
 def kb_decompose_confirm(task_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[

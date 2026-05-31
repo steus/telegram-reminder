@@ -44,6 +44,15 @@ class Visibility(str, enum.Enum):
     private = "private"
 
 
+class SharedScope(str, enum.Enum):
+    """Куда фактически ушла сводка (§5 ТЗ)."""
+
+    group = "group"
+    facilitator = "facilitator"
+    private = "private"
+    none = "none"
+
+
 class DialogStateEnum(str, enum.Enum):
     """Где участник в диалоге (§5 ТЗ)."""
 
@@ -170,6 +179,26 @@ class Member(Base):
         back_populates="member", uselist=False, cascade="all, delete-orphan"
     )
     tasks: Mapped[list["Task"]] = relationship(back_populates="member")
+    summaries: Mapped[list["Summary"]] = relationship(back_populates="member")
+
+
+class Summary(Base):
+    __tablename__ = "summary"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    member_id: Mapped[int] = mapped_column(ForeignKey("member.id"))
+    week_id: Mapped[int] = mapped_column(ForeignKey("week.id"))
+    member_text: Mapped[str] = mapped_column(Text)
+    facilitator_text: Mapped[str] = mapped_column(Text)
+    shared_scope: Mapped[SharedScope] = mapped_column(
+        Enum(SharedScope, native_enum=False, length=16),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    member: Mapped["Member"] = relationship(back_populates="summaries")
+    week: Mapped["Week"] = relationship()
 
 
 class DialogState(Base):

@@ -21,15 +21,6 @@ async def hint_unhandled_audio(message: Message) -> None:
 
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
-    await message.answer(
-        "Что я умею (по мере сборки):\n"
-        "/start — знакомство и настройка\n"
-        "/setgoals — поставить цели на неделю (private-режим)\n"
-        "/tasks — задачи текущей недели\n"
-        "/checkin_now — чек-ин вручную (для разработки)\n"
-        "/set_plaud_url — ссылка на транскрипт (ведущий)\n"
-        "/paste_transcript — вставить транскрипт вручную (ведущий)\n"
-        "/stats — твой прогресс по неделям\n"
-        "/settings — настройки видимости, времени, пинга\n"
-        "/help — это сообщение"
-    )
+    from app.bot.help_text import build_help_text
+
+    await message.answer(await build_help_text(message.chat.id))

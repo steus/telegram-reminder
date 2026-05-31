@@ -1,4 +1,4 @@
-"""Задачи: private-ввод, подтверждение, /tasks (§6.2, §6.6 ТЗ)."""
+"""Goals: private-ввод, подтверждение, /set_my_goals (§6.2, §6.6 ТЗ)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.bot.dialog_context import DialogContext
+from app.bot.command_names import (
+    CMD_SET_MY_GOALS,
+    CMD_SYNC_MY_GOALS,
+    CMD_VIEW_MY_GOALS,
+)
 from app.bot.messages import UNKNOWN_USER_TEXT
 from app.bot.states import TaskStates
 from app.bot.task_confirmation import (
@@ -35,22 +40,26 @@ from app.services.extraction import (
     start_private_goal_collection,
     structure_goals,
 )
+from app.services.sheet_sync import sync_member_goals_to_sheet
 from app.services.voice import (
+    EmptyTranscriptionError,
+    VOICE_NOTHING_HEARD,
     VOICE_TOO_LONG,
     VOICE_TRANSCRIBE_FAILED,
     detect_audio_source,
     duration_ok,
+    is_whisper_hallucination,
     message_has_audio,
     transcribe_message_audio,
 )
 
 logger = logging.getLogger(__name__)
 
-router = Router(name="tasks")
+router = Router(name="goals")
 
 
 class InTaskInput(BaseFilter):
-    """Сообщение в режиме ввода/правки задач (collect или correct)."""
+    """Сообщение в режиме ввода/правки goals (collect или correct)."""
 
     async def __call__(self, message: Message) -> bool:
         if message.text and message.text.startswith("/"):
@@ -77,7 +86,7 @@ async def _show_confirmation(message: Message, member_id: int, week_id: int) -> 
     )
 
 
-@router.message(Command("setgoals"))
+@router.message(Command(CMD_SET_MY_GOALS))
 async def cmd_setgoals(message: Message, state: FSMContext) -> None:
     async with get_session() as session:
         member = await get_member_by_chat_id(session, message.chat.id)
@@ -104,8 +113,8 @@ async def cmd_setgoals(message: Message, state: FSMContext) -> None:
     await message.answer(GOAL_COLLECTION_PROMPT)
 
 
-@router.message(Command("tasks"))
-async def cmd_tasks(message: Message) -> None:
+@router.message(Command(CMD_VIEW_MY_GOALS))
+async def cmd_view_my_goals(message: Message) -> None:
     async with get_session() as session:
         member = await get_member_by_chat_id(session, message.chat.id)
         if member is None:
@@ -123,7 +132,7 @@ async def cmd_tasks(message: Message) -> None:
     if not tasks:
         await message.answer(
             "Задач на эту неделю пока нет. "
-            "Чтобы добавить — /setgoals (пока вручную, позже — по расписанию)."
+            f"Чтобы добавить — /{CMD_SET_MY_GOALS}."
         )
         return
 
@@ -131,6 +140,18 @@ async def cmd_tasks(message: Message) -> None:
         f"Твои задачи на неделю с {week.start_date.strftime('%d.%m.%Y')}:\n\n"
         f"{format_task_list(tasks, show_status=True)}"
     )
+
+
+@router.message(Command(CMD_SYNC_MY_GOALS))
+async def cmd_sync_my_goals(message: Message) -> None:
+    async with get_session() as session:
+        member = await get_member_by_chat_id(session, message.chat.id)
+        if member is None:
+            await message.answer(UNKNOWN_USER_TEXT)
+            return
+        result = await sync_member_goals_to_sheet(session, member)
+
+    await message.answer(result.message)
 
 
 @router.message(InTaskInput())
@@ -144,6 +165,9 @@ async def handle_goal_text(message: Message, state: FSMContext) -> None:
             return
         try:
             user_text = await transcribe_message_audio(message.bot, message)
+        except EmptyTranscriptionError:
+            await message.answer(VOICE_NOTHING_HEARD)
+            return
         except Exception:
             logger.exception("Goal audio transcription failed")
             await message.answer(VOICE_TRANSCRIBE_FAILED)
@@ -151,6 +175,10 @@ async def handle_goal_text(message: Message, state: FSMContext) -> None:
         if not user_text:
             await message.answer(VOICE_TRANSCRIBE_FAILED)
             return
+
+    if user_text and is_whisper_hallucination(user_text):
+        await message.answer(VOICE_NOTHING_HEARD)
+        return
 
     async with get_session() as session:
         member = await get_member_by_chat_id(session, message.chat.id)
@@ -166,7 +194,7 @@ async def handle_goal_text(message: Message, state: FSMContext) -> None:
         texts = await structure_goals(user_text or "")
         if not texts:
             await message.answer(
-                "Не нашёл ни одной задачи. Попробуй списком — каждая цель с новой строки."
+                "Не нашёл ни одной задачи. Попробуй списком — каждая с новой строки."
             )
             return
 

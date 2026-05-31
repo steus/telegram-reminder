@@ -28,6 +28,8 @@ from app.services.decompose import (
     start_decompose_flow,
 )
 from app.services.voice import (
+    EmptyTranscriptionError,
+    VOICE_NOTHING_HEARD,
     VOICE_TOO_LONG,
     VOICE_TRANSCRIBE_FAILED,
     detect_audio_source,
@@ -159,6 +161,9 @@ async def handle_decompose_input(message: Message) -> None:
                 return
             try:
                 user_text = await transcribe_message_audio(message.bot, message)
+            except EmptyTranscriptionError:
+                await message.answer(VOICE_NOTHING_HEARD)
+                return
             except Exception:
                 await message.answer(VOICE_TRANSCRIBE_FAILED)
                 return

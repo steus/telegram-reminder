@@ -9,7 +9,7 @@
 - [x] **Этап 3** — Чек-ин на кнопках (`stage-3-checkin.md`)
 - [x] **Этап 4** — LLM-слой и авто-извлечение (`stage-4-llm-extraction.md`)
 - [x] **Этап 5** — Декомпозиция и голос (`stage-5-decompose-voice.md`)
-- [ ] **Этап 6** — Итоги и витрина (`stage-6-summary-sheets.md`)
+- [x] **Этап 6** — Итоги и витрина (`stage-6-summary-sheets.md`)
 - [ ] **Этап 7** — Прогресс и деплой (`stage-7-stats-deploy.md`)
 
 ## Бэклог (обсудить позже)
@@ -45,3 +45,7 @@
   `week_id` следующей недели (`get_or_create_next_week`). **Whisper в Docker:**
   бинарь+модель монтируются томом (не в образ) — легче образ; на слабом VPS —
   `WHISPER_MODE=api`. Исправлен дубль `filter_extracted_tasks` в `extraction.py`.
+- **После этапа 6:** `[REPORT_READY]` → `app/services/summary.py` (split, pending в
+  `context_json`, кнопки `sm:yn:yes|no`). Маршрутизация по `visibility` → Sheets
+  (`app/services/sheets.py`, только `group`), ведущим, или только БД. Модель
+  `summary` + `SharedScope`. Миграция `c3d4e5f6a7b8`. `GOOGLE_SERVICE_ACCOUNT_JSON`.
