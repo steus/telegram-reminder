@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     whisper_mode: str = Field("local", alias="WHISPER_MODE")
     whisper_cpp_path: str | None = Field(None, alias="WHISPER_CPP_PATH")
     whisper_model_path: str | None = Field(None, alias="WHISPER_MODEL_PATH")
+    whisper_max_voice_duration: int = Field(120, alias="WHISPER_MAX_VOICE_DURATION")
+    whisper_timeout: float = Field(120.0, alias="WHISPER_TIMEOUT")
     openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")
 
     # --- Google Sheets (появляется на этапе 6) ---

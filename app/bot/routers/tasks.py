@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from aiogram import F, Router
 from aiogram.filters import BaseFilter, Command
 from aiogram.fsm.context import FSMContext
@@ -33,6 +35,16 @@ from app.services.extraction import (
     start_private_goal_collection,
     structure_goals,
 )
+from app.services.voice import (
+    VOICE_TOO_LONG,
+    VOICE_TRANSCRIBE_FAILED,
+    detect_audio_source,
+    duration_ok,
+    message_has_audio,
+    transcribe_message_audio,
+)
+
+logger = logging.getLogger(__name__)
 
 router = Router(name="tasks")
 
@@ -41,7 +53,9 @@ class InTaskInput(BaseFilter):
     """Сообщение в режиме ввода/правки задач (collect или correct)."""
 
     async def __call__(self, message: Message) -> bool:
-        if not message.text or message.text.startswith("/"):
+        if message.text and message.text.startswith("/"):
+            return False
+        if not message.text and not message_has_audio(message):
             return False
         async with get_session() as session:
             member = await get_member_by_chat_id(session, message.chat.id)
@@ -119,8 +133,25 @@ async def cmd_tasks(message: Message) -> None:
     )
 
 
-@router.message(InTaskInput(), F.text)
+@router.message(InTaskInput())
 async def handle_goal_text(message: Message, state: FSMContext) -> None:
+    user_text: str | None = message.text
+    if message_has_audio(message):
+        source = detect_audio_source(message)
+        duration = source[2] if source else None
+        if not duration_ok(duration):
+            await message.answer(VOICE_TOO_LONG)
+            return
+        try:
+            user_text = await transcribe_message_audio(message.bot, message)
+        except Exception:
+            logger.exception("Goal audio transcription failed")
+            await message.answer(VOICE_TRANSCRIBE_FAILED)
+            return
+        if not user_text:
+            await message.answer(VOICE_TRANSCRIBE_FAILED)
+            return
+
     async with get_session() as session:
         member = await get_member_by_chat_id(session, message.chat.id)
         if member is None:
@@ -132,7 +163,7 @@ async def handle_goal_text(message: Message, state: FSMContext) -> None:
             week_id = await start_private_goal_collection(session, member)
             dialog.active_week_id = week_id
 
-        texts = await structure_goals(message.text or "")
+        texts = await structure_goals(user_text or "")
         if not texts:
             await message.answer(
                 "Не нашёл ни одной задачи. Попробуй списком — каждая цель с новой строки."

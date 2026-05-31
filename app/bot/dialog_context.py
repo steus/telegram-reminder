@@ -8,6 +8,7 @@ from typing import Any
 
 
 ONBOARDING_STEPS = ("input_mode", "visibility", "weekday", "time", "ping")
+MAX_CHECKIN_MESSAGES = 10
 
 
 @dataclass
@@ -18,6 +19,9 @@ class DialogContext:
     task_step: str | None = None  # collect | confirm | correct
     facilitator_group_id: int | None = None
     facilitator_pending: str | None = None
+    checkin_messages: list[dict[str, str]] | None = None
+    decompose_task_id: int | None = None
+    decompose_steps: list[str] | None = None
 
     @classmethod
     def from_json(cls, raw: str | None) -> DialogContext:
@@ -34,6 +38,9 @@ class DialogContext:
             task_step=data.get("task_step"),
             facilitator_group_id=data.get("facilitator_group_id"),
             facilitator_pending=data.get("facilitator_pending"),
+            checkin_messages=_parse_message_list(data.get("checkin_messages")),
+            decompose_task_id=data.get("decompose_task_id"),
+            decompose_steps=_parse_str_list(data.get("decompose_steps")),
         )
 
     def to_json(self) -> str:
@@ -72,6 +79,8 @@ class DialogContext:
 
     def start_task_collection(self) -> None:
         self.task_step = "collect"
+        self.decompose_task_id = None
+        self.decompose_steps = None
 
     def show_task_confirmation(self) -> None:
         self.task_step = "confirm"
@@ -100,3 +109,40 @@ class DialogContext:
 
     def is_facilitator_pasting(self) -> bool:
         return self.facilitator_group_id is not None
+
+    def append_checkin_message(self, role: str, content: str) -> None:
+        messages = list(self.checkin_messages or [])
+        messages.append({"role": role, "content": content.strip()})
+        if len(messages) > MAX_CHECKIN_MESSAGES:
+            messages = messages[-MAX_CHECKIN_MESSAGES:]
+        self.checkin_messages = messages
+
+    def clear_checkin_messages(self) -> None:
+        self.checkin_messages = None
+
+    def start_decompose(self, task_id: int, steps: list[str] | None = None) -> None:
+        self.decompose_task_id = task_id
+        self.decompose_steps = steps
+
+    def set_decompose_steps(self, steps: list[str]) -> None:
+        self.decompose_steps = steps
+
+    def clear_decompose(self) -> None:
+        self.decompose_task_id = None
+        self.decompose_steps = None
+
+
+def _parse_message_list(raw: object) -> list[dict[str, str]] | None:
+    if not isinstance(raw, list):
+        return None
+    result: list[dict[str, str]] = []
+    for item in raw:
+        if isinstance(item, dict) and item.get("role") and item.get("content"):
+            result.append({"role": str(item["role"]), "content": str(item["content"])})
+    return result or None
+
+
+def _parse_str_list(raw: object) -> list[str] | None:
+    if not isinstance(raw, list):
+        return None
+    return [str(x) for x in raw if str(x).strip()] or None

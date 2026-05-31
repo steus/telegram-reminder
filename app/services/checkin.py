@@ -10,7 +10,7 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.bot.keyboards import kb_checkin_message
+from app.bot.keyboards import kb_checkin_message, kb_decompose_offer
 from app.bot.task_confirmation import format_task_list
 from app.db.models import DialogStateEnum, Member, Task, TaskStatus
 from app.db.repo import (
@@ -102,10 +102,16 @@ async def send_checkin(bot: Bot, member: Member) -> bool:
     return True
 
 
-async def on_stuck_status(task: Task) -> None:
-    """Заглушка под декомпозицию (этап 5)."""
-    # TODO(stage-5): предложить «Помочь разбить на шаги?» при status=stuck
-    logger.debug("Task %s marked stuck — decompose hook pending stage 5", task.id)
+async def on_stuck_status(bot: Bot, chat_id: str | int, task: Task) -> None:
+    """Предложить декомпозицию при status=stuck (§6.4)."""
+    from app.services.decompose import format_decompose_offer
+
+    await bot.send_message(
+        chat_id,
+        format_decompose_offer(task),
+        reply_markup=kb_decompose_offer(task.id),
+    )
+    logger.info("Decompose offer sent for task_id=%s", task.id)
 
 
 def _scheduler_sent_map(context_json: str) -> dict[str, str]:

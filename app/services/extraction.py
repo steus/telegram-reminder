@@ -92,7 +92,7 @@ async def structure_goals(text: str) -> list[str]:
 
 
 
-async def extract_tasks_from_transcript(
+def filter_extracted_tasks(
     tasks: list[str],
     full_name: str,
     other_names: list[str],

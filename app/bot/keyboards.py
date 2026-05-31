@@ -41,6 +41,44 @@ def kb_checkin_message(tasks: list[Task]) -> InlineKeyboardMarkup:
         inline_keyboard=[kb_checkin_task_row(task) for task in tasks]
     )
 
+
+def decompose_offer_callback(task_id: int, accept: bool) -> str:
+    return f"dc:yn:{'yes' if accept else 'no'}:{task_id}"
+
+
+def kb_decompose_offer(task_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Да, помоги",
+                    callback_data=decompose_offer_callback(task_id, True),
+                ),
+                InlineKeyboardButton(
+                    text="Нет, спасибо",
+                    callback_data=decompose_offer_callback(task_id, False),
+                ),
+            ]
+        ]
+    )
+
+
+def kb_decompose_confirm(task_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Всё верно",
+                    callback_data=f"dc:ok:{task_id}",
+                ),
+                InlineKeyboardButton(
+                    text="✏️ Поправить",
+                    callback_data=f"dc:ed:{task_id}",
+                ),
+            ]
+        ]
+    )
+
 WEEKDAYS = (
     (0, "Пн"),
     (1, "Вт"),

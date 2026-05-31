@@ -8,7 +8,7 @@
 - [x] **Этап 2** — Задачи (ручной режим) (`stage-2-manual-tasks.md`)
 - [x] **Этап 3** — Чек-ин на кнопках (`stage-3-checkin.md`)
 - [x] **Этап 4** — LLM-слой и авто-извлечение (`stage-4-llm-extraction.md`)
-- [ ] **Этап 5** — Декомпозиция и голос (`stage-5-decompose-voice.md`)
+- [x] **Этап 5** — Декомпозиция и голос (`stage-5-decompose-voice.md`)
 - [ ] **Этап 6** — Итоги и витрина (`stage-6-summary-sheets.md`)
 - [ ] **Этап 7** — Прогресс и деплой (`stage-7-stats-deploy.md`)
 
@@ -38,3 +38,10 @@
   (без LLM). Несколько ведущих: `group_facilitator`. Auto-поток:
   `app/services/auto_goal_setup.py`. Docker: `UID`/`GID` в `.env` для SQLite.
   Миграции `a1b2c3d4e5f6`, `b2c3d4e5f6a7`.
+- **После этапа 5:** `app/services/voice.py` — whisper local/api, лимит
+  `WHISPER_MAX_VOICE_DURATION`. Трекинг: `app/services/tracking.py` (промпт 2,
+  маркер `[STATUSES]`). Декомпозиция: `decompose.py` + роутер `decompose`,
+  callback `dc:yn:yes|no:{id}`, `dc:ok|ed:{id}`; шаги → `source=decomposed`,
+  `week_id` следующей недели (`get_or_create_next_week`). **Whisper в Docker:**
+  бинарь+модель монтируются томом (не в образ) — легче образ; на слабом VPS —
+  `WHISPER_MODE=api`. Исправлен дубль `filter_extracted_tasks` в `extraction.py`.

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, time, timedelta
 from typing import Any
 
 from sqlalchemy import delete, select
@@ -393,3 +393,50 @@ async def update_week_transcript(
     week.transcript_text = transcript_text.strip()
     await session.flush()
     return week
+
+
+async def get_or_create_next_week(
+    session: AsyncSession, group_id: int, after_week: Week
+) -> Week:
+    """Следующая неделя группы (+7 дней от after_week)."""
+    next_start = after_week.start_date + timedelta(days=7)
+    result = await session.execute(
+        select(Week).where(
+            Week.group_id == group_id,
+            Week.start_date == next_start,
+        )
+    )
+    week = result.scalar_one_or_none()
+    if week is None:
+        week = Week(group_id=group_id, start_date=next_start)
+        session.add(week)
+        await session.flush()
+    return week
+
+
+async def create_decomposed_subtasks(
+    session: AsyncSession,
+    *,
+    member_id: int,
+    parent_task: Task,
+    next_week_id: int,
+    step_texts: list[str],
+) -> list[Task]:
+    """Сохранить шаги декомпозиции в следующую неделю; родитель → decomposed."""
+    tasks: list[Task] = []
+    for idx, text in enumerate(step_texts):
+        task = Task(
+            member_id=member_id,
+            week_id=next_week_id,
+            text=text,
+            source=TaskSource.decomposed,
+            parent_task_id=parent_task.id,
+            position=idx,
+            confirmed=True,
+            status=TaskStatus.pending,
+        )
+        session.add(task)
+        tasks.append(task)
+    parent_task.status = TaskStatus.decomposed
+    await session.flush()
+    return tasks
