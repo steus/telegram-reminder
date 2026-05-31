@@ -95,6 +95,8 @@ async def main() -> None:
             f"Создан участник #{member.id}: {member.full_name} "
             f"(chat_id={member.telegram_chat_id})"
         )
+        print(f"Invite code группы: {group.invite_code}")
+        print("Ведущий может получить ссылку в боте: /group_invite")
         print("Для auto-режима --name должно совпадать с именем в транскрипте Plaud.")
         print("Отправь боту /start для прохождения онбординга.")
 

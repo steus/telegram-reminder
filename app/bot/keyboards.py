@@ -240,3 +240,97 @@ def format_member_settings(member: Member) -> str:
         f"• Чек-ин: {wd}, {tm} ({member.timezone})\n"
         f"• Пинг в середине недели: {ping}"
     )
+
+
+def kb_membership_join_confirm(group_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Да, хочу вступить",
+                    callback_data=f"mj:join:yes:{group_id}",
+                ),
+                InlineKeyboardButton(
+                    text="Нет",
+                    callback_data=f"mj:join:no:{group_id}",
+                ),
+            ]
+        ]
+    )
+
+
+def kb_membership_request_decision(request_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Принять",
+                    callback_data=f"mj:ok:{request_id}",
+                ),
+                InlineKeyboardButton(
+                    text="❌ Отклонить",
+                    callback_data=f"mj:no:{request_id}",
+                ),
+            ]
+        ]
+    )
+
+
+def kb_member_admin_actions(
+    member_id: int, *, is_facilitator: bool, is_active: bool
+) -> list[InlineKeyboardButton]:
+    buttons: list[InlineKeyboardButton] = []
+    if is_active and not is_facilitator:
+        buttons.append(
+            InlineKeyboardButton(
+                text="Сделать ведущим",
+                callback_data=f"mj:fac:{member_id}",
+            )
+        )
+    if is_active:
+        buttons.append(
+            InlineKeyboardButton(
+                text="Деактивировать",
+                callback_data=f"mj:deact:{member_id}",
+            )
+        )
+    buttons.append(
+        InlineKeyboardButton(
+            text="Удалить",
+            callback_data=f"mj:del:{member_id}",
+        )
+    )
+    return buttons
+
+
+def kb_member_delete_confirm(member_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Да, удалить",
+                    callback_data=f"mj:del:ok:{member_id}",
+                ),
+                InlineKeyboardButton(
+                    text="Отмена",
+                    callback_data=f"mj:del:cn:{member_id}",
+                ),
+            ]
+        ]
+    )
+
+
+def kb_group_members(
+    members: list[Member], facilitator_chat_ids: set[str]
+) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for member in members:
+        row = kb_member_admin_actions(
+            member.id,
+            is_facilitator=member.telegram_chat_id in facilitator_chat_ids,
+            is_active=member.is_active,
+        )
+        if row:
+            rows.append(row)
+    return InlineKeyboardMarkup(inline_keyboard=rows or [[]])
+

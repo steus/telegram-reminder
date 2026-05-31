@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date, time, timedelta
+import secrets
+from datetime import date, datetime, time, timedelta
+from datetime import timezone as dt_timezone
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
@@ -15,6 +17,8 @@ from app.db.models import (
     GroupFacilitator,
     InputMode,
     Member,
+    MembershipRequest,
+    MembershipRequestStatus,
     SharedScope,
     Summary,
     Task,
@@ -23,6 +27,10 @@ from app.db.models import (
     Visibility,
     Week,
 )
+
+
+def generate_invite_code() -> str:
+    return secrets.token_hex(4)
 
 
 async def get_member_by_chat_id(
@@ -41,6 +49,188 @@ async def get_member_by_id(session: AsyncSession, member_id: int) -> Member | No
 
 async def get_group(session: AsyncSession, group_id: int) -> Group | None:
     return await session.get(Group, group_id)
+
+
+async def get_group_by_invite_code(
+    session: AsyncSession, invite_code: str
+) -> Group | None:
+    result = await session.execute(
+        select(Group).where(Group.invite_code == invite_code.strip())
+    )
+    return result.scalar_one_or_none()
+
+
+async def is_group_facilitator(
+    session: AsyncSession, group_id: int, chat_id: str | int
+) -> bool:
+    result = await session.execute(
+        select(GroupFacilitator.id).where(
+            GroupFacilitator.group_id == group_id,
+            GroupFacilitator.telegram_chat_id == str(chat_id),
+        )
+    )
+    return result.scalar_one_or_none() is not None
+
+
+async def remove_group_facilitator(
+    session: AsyncSession,
+    group_id: int,
+    telegram_chat_id: str | int,
+) -> bool:
+    """Снять ведущего. False — последний ведущий или не был ведущим."""
+    chat_id = str(telegram_chat_id)
+    ids = await list_group_facilitator_chat_ids(session, group_id)
+    if len(ids) <= 1 or chat_id not in ids:
+        return False
+
+    await session.execute(
+        delete(GroupFacilitator).where(
+            GroupFacilitator.group_id == group_id,
+            GroupFacilitator.telegram_chat_id == chat_id,
+        )
+    )
+    await session.flush()
+    await _sync_group_primary_facilitator(session, group_id)
+    return True
+
+
+async def deactivate_member(session: AsyncSession, member: Member) -> Member:
+    member.is_active = False
+    await session.flush()
+    return member
+
+
+async def delete_member(session: AsyncSession, member: Member) -> bool:
+    """Удалить участника и связанные данные. False — нельзя удалить последнего ведущего."""
+    group_id = member.group_id
+    chat_id = member.telegram_chat_id
+    facilitator_ids = await list_group_facilitator_chat_ids(session, group_id)
+    if chat_id in facilitator_ids and len(facilitator_ids) <= 1:
+        return False
+
+    if chat_id in facilitator_ids:
+        await session.execute(
+            delete(GroupFacilitator).where(
+                GroupFacilitator.group_id == group_id,
+                GroupFacilitator.telegram_chat_id == chat_id,
+            )
+        )
+
+    member_id = member.id
+    await session.execute(delete(Summary).where(Summary.member_id == member_id))
+    await session.execute(
+        update(Task)
+        .where(Task.member_id == member_id)
+        .values(parent_task_id=None)
+    )
+    await session.execute(delete(Task).where(Task.member_id == member_id))
+    await session.execute(delete(DialogState).where(DialogState.member_id == member_id))
+    await session.delete(member)
+    await session.flush()
+    await _sync_group_primary_facilitator(session, group_id)
+    return True
+
+
+async def list_members_for_group(
+    session: AsyncSession, group_id: int, *, active_only: bool = False
+) -> list[Member]:
+    query = select(Member).where(Member.group_id == group_id).order_by(Member.id)
+    if active_only:
+        query = query.where(Member.is_active.is_(True))
+    result = await session.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_pending_membership_request_by_chat(
+    session: AsyncSession, chat_id: str | int
+) -> MembershipRequest | None:
+    result = await session.execute(
+        select(MembershipRequest)
+        .where(
+            MembershipRequest.telegram_chat_id == str(chat_id),
+            MembershipRequest.status == MembershipRequestStatus.pending,
+        )
+        .order_by(MembershipRequest.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_membership_request_by_id(
+    session: AsyncSession, request_id: int
+) -> MembershipRequest | None:
+    return await session.get(MembershipRequest, request_id)
+
+
+async def list_pending_membership_requests_for_group(
+    session: AsyncSession, group_id: int
+) -> list[MembershipRequest]:
+    result = await session.execute(
+        select(MembershipRequest)
+        .where(
+            MembershipRequest.group_id == group_id,
+            MembershipRequest.status == MembershipRequestStatus.pending,
+        )
+        .order_by(MembershipRequest.created_at)
+    )
+    return list(result.scalars().all())
+
+
+async def create_membership_request(
+    session: AsyncSession,
+    *,
+    group_id: int,
+    telegram_chat_id: str | int,
+    full_name: str,
+    telegram_username: str | None = None,
+) -> MembershipRequest:
+    row = MembershipRequest(
+        group_id=group_id,
+        telegram_chat_id=str(telegram_chat_id),
+        telegram_username=telegram_username,
+        full_name=full_name.strip(),
+        status=MembershipRequestStatus.pending,
+    )
+    session.add(row)
+    await session.flush()
+    return row
+
+
+async def approve_membership_request(
+    session: AsyncSession,
+    request: MembershipRequest,
+    *,
+    resolved_by_chat_id: str | int,
+    timezone: str = "Europe/Tallinn",
+) -> Member:
+    """Одобрить заявку: member + dialog_state. Заявка → approved."""
+    member = await create_member(
+        session,
+        group_id=request.group_id,
+        full_name=request.full_name,
+        telegram_chat_id=request.telegram_chat_id,
+        timezone=timezone,
+    )
+    await get_or_create_dialog_state(session, member.id)
+
+    request.status = MembershipRequestStatus.approved
+    request.resolved_by_chat_id = str(resolved_by_chat_id)
+    request.resolved_at = datetime.now(dt_timezone.utc)
+    await session.flush()
+    return member
+
+
+async def reject_membership_request(
+    session: AsyncSession,
+    request: MembershipRequest,
+    *,
+    resolved_by_chat_id: str | int,
+) -> MembershipRequest:
+    request.status = MembershipRequestStatus.rejected
+    request.resolved_by_chat_id = str(resolved_by_chat_id)
+    request.resolved_at = datetime.now(dt_timezone.utc)
+    await session.flush()
+    return request
 
 
 async def get_group_by_facilitator_chat_id(
@@ -144,6 +334,7 @@ async def create_group(
         name=name,
         facilitator_chat_id=str(ids[0]),
         sheet_id=sheet_id,
+        invite_code=generate_invite_code(),
     )
     session.add(group)
     await session.flush()

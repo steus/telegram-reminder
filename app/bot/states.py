@@ -29,3 +29,7 @@ class TaskStates(StatesGroup):
 class FacilitatorStates(StatesGroup):
     pasting_transcript = State()
     confirm_resend = State()
+
+
+class MembershipStates(StatesGroup):
+    waiting_name = State()

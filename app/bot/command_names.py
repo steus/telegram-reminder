@@ -16,3 +16,8 @@ CMD_GROUP_SET_PLAUD = "group_set_plaud"
 # --- Ведущий: goals (все участники) ---
 CMD_GROUP_VIEW_GOALS = "group_view_goals"
 CMD_GROUP_SYNC_GOALS = "group_sync_goals"
+
+# --- Ведущий: участники и заявки ---
+CMD_GROUP_INVITE = "group_invite"
+CMD_GROUP_MEMBERS = "group_members"
+CMD_GROUP_REQUESTS = "group_requests"

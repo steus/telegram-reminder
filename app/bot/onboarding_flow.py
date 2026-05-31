@@ -24,6 +24,14 @@ def parse_checkin_time(text: str) -> time | None:
     return None
 
 
+def parse_time_callback_data(data: str, prefix: str) -> time | None:
+    """Из callback_data вида ob:tm:18:00 или st:tm:18:00."""
+    head = f"{prefix}:"
+    if not data.startswith(head):
+        return None
+    return parse_checkin_time(data[len(head) :])
+
+
 def onboarding_prompt(step: str) -> tuple[str, InlineKeyboardMarkup | None]:
     prompts: dict[str, tuple[str, InlineKeyboardMarkup | None]] = {
         "input_mode": (

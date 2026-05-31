@@ -10,6 +10,7 @@
 - [x] **Этап 4** — LLM-слой и авто-извлечение (`stage-4-llm-extraction.md`)
 - [x] **Этап 5** — Декомпозиция и голос (`stage-5-decompose-voice.md`)
 - [x] **Этап 6** — Итоги и витрина (`stage-6-summary-sheets.md`)
+- [x] **Этап 6b** — Вступление через Telegram (`stage-6b-member-join.md`)
 - [ ] **Этап 7** — Прогресс и деплой (`stage-7-stats-deploy.md`)
 
 ## Бэклог (обсудить позже)
@@ -49,3 +50,7 @@
   `context_json`, кнопки `sm:yn:yes|no`). Маршрутизация по `visibility` → Sheets
   (`app/services/sheets.py`, только `group`), ведущим, или только БД. Модель
   `summary` + `SharedScope`. Миграция `c3d4e5f6a7b8`. `GOOGLE_SERVICE_ACCOUNT_JSON`.
+- **После этапа 6b:** invite `/start join_{code}`, `membership_request`, роутер
+  `membership.py`. Ведущий: `/group_invite`, `/group_members` (деактивировать/удалить),
+  `/group_requests`. Callbacks `mj:*`. Миграция `d4e5f6a7b8c9`, `group.invite_code`.
+  Фиксы: lazy-load группы в async (уведомления), парсинг `ob:tm:HH:MM`, подсказки `/help`.

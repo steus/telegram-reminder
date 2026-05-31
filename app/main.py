@@ -9,7 +9,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from app.bot.commands import register_bot_commands
-from app.bot.routers import checkin, common, decompose, facilitator, onboarding, tasks
+from app.bot.routers import checkin, common, decompose, facilitator, membership, onboarding, tasks
 from app.bot.routers import settings as settings_router
 from app.config import settings
 from app.db.repo import list_all_facilitator_chat_ids
@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 async def main() -> None:
     bot = Bot(token=settings.telegram_bot_token)
     dp = Dispatcher(storage=MemoryStorage())
+    dp.include_router(membership.router)
     dp.include_router(onboarding.router)
     dp.include_router(settings_router.router)
     dp.include_router(facilitator.router)

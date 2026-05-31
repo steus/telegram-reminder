@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.db.models import Base, Group, Member, Task, TaskSource, TaskStatus, Week
-from app.db.repo import create_decomposed_subtasks, get_or_create_next_week
+from app.db.repo import create_decomposed_subtasks, generate_invite_code, get_or_create_next_week
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ async def session() -> AsyncSession:
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as sess:
-        group = Group(name="G", facilitator_chat_id="1")
+        group = Group(name="G", facilitator_chat_id="1", invite_code=generate_invite_code())
         sess.add(group)
         await sess.flush()
         member = Member(

@@ -6,8 +6,11 @@
 from __future__ import annotations
 
 from app.bot.command_names import (
+    CMD_GROUP_INVITE,
+    CMD_GROUP_MEMBERS,
     CMD_GROUP_PASTE_DONE,
     CMD_GROUP_PASTE_TRANSCRIPT,
+    CMD_GROUP_REQUESTS,
     CMD_GROUP_SET_PLAUD,
     CMD_GROUP_SYNC_GOALS,
     CMD_GROUP_VIEW_GOALS,
@@ -39,6 +42,11 @@ async def build_help_text(chat_id: int) -> str:
     if group is not None:
         lines.extend(
             [
+                "",
+                "Ведущий — участники:",
+                f"/{CMD_GROUP_INVITE} — ссылка-приглашение в группу",
+                f"/{CMD_GROUP_MEMBERS} — список участников и назначение ведущих",
+                f"/{CMD_GROUP_REQUESTS} — заявки на вступление",
                 "",
                 "Ведущий — задачи из транскрипта (Plaud):",
                 f"/{CMD_GROUP_PASTE_TRANSCRIPT} — начать вставку «План действий»",

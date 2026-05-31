@@ -50,14 +50,21 @@ docker compose exec bot python scripts/seed_member.py --chat-id ВАШ_CHAT_ID -
 python scripts/seed_member.py --chat-id ВАШ_CHAT_ID --name "Ваше Имя"
 ```
 
-Затем отправь боту `/start` — пройди онбординг кнопками. Незнакомый chat_id
-получит вежливый отказ без создания записи.
+Затем отправь боту `/start` — пройди онбординг кнопками.
+
+**Альтернатива — вступление через бота (этап 6b):** ведущий отправляет
+`/group_invite` и передаёт ссылку новому участнику. Тот подаёт заявку; любой
+ведущий принимает или отклоняет её кнопками. После одобрения — снова `/start`
+и онбординг. Имя при заявке — латиницей (для Plaud).
+
+Незнакомый chat_id без invite-ссылки получит подсказку обратиться к ведущему.
 
 ### Ведущие группы (facilitator)
 
 У группы может быть **несколько ведущих**. Их Telegram chat_id хранятся в таблице
 `group_facilitator` (не в `groups` — таблица называется `"group"`). Команды ведущего:
-`/set_plaud_url`, `/paste_transcript`.
+`/group_invite`, `/group_members`, `/group_requests`,
+`/group_set_plaud`, `/group_paste_transcript`.
 
 Поле `"group".facilitator_chat_id` — устаревшая денормализация (первый ведущий в
 списке); для проверки прав бот смотрит только `group_facilitator`.

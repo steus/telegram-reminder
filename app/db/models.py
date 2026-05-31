@@ -76,6 +76,12 @@ class TaskStatus(str, enum.Enum):
     decomposed = "decomposed"
 
 
+class MembershipRequestStatus(str, enum.Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
 class Group(Base):
     __tablename__ = "group"
 
@@ -83,6 +89,7 @@ class Group(Base):
     name: Mapped[str] = mapped_column(String(255))
     facilitator_chat_id: Mapped[str] = mapped_column(String(64))
     sheet_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    invite_code: Mapped[str] = mapped_column(String(16), unique=True)
 
     members: Mapped[list["Member"]] = relationship(
         back_populates="group", cascade="all, delete-orphan"
@@ -93,6 +100,34 @@ class Group(Base):
     facilitators: Mapped[list["GroupFacilitator"]] = relationship(
         back_populates="group", cascade="all, delete-orphan"
     )
+    membership_requests: Mapped[list["MembershipRequest"]] = relationship(
+        back_populates="group", cascade="all, delete-orphan"
+    )
+
+
+class MembershipRequest(Base):
+    """Заявка на вступление в группу (до создания member)."""
+
+    __tablename__ = "membership_request"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("group.id"))
+    telegram_chat_id: Mapped[str] = mapped_column(String(64))
+    telegram_username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    full_name: Mapped[str] = mapped_column(String(255))
+    status: Mapped[MembershipRequestStatus] = mapped_column(
+        Enum(MembershipRequestStatus, native_enum=False, length=16),
+        default=MembershipRequestStatus.pending,
+    )
+    resolved_by_chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    group: Mapped["Group"] = relationship(back_populates="membership_requests")
 
 
 class GroupFacilitator(Base):

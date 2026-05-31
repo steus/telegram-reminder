@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message
 
 from app.bot.dialog_context import DialogContext
 from app.bot.fsm_sync import sync_fsm_from_context
-from app.bot.onboarding_flow import onboarding_prompt, parse_checkin_time
+from app.bot.onboarding_flow import onboarding_prompt, parse_checkin_time, parse_time_callback_data
 from app.bot.states import OnboardingStates
 from app.db.models import DialogStateEnum, InputMode, Visibility
 from app.db.repo import (
@@ -37,8 +37,9 @@ async def _finish_onboarding(message: Message, member_id: int, name: str) -> Non
     async with get_session() as session:
         await set_dialog_state(session, member_id, DialogStateEnum.idle)
     await message.answer(
-        f"Готово, {name}! Настройки сохранены — буду рядом, когда понадоблюсь. "
-        "Если захочешь что-то поменять — /settings."
+        f"Готово, {name}! Настройки сохранены — буду рядом, когда понадоблюсь.\n\n"
+        "Если захочешь что-то поменять — /settings.\n"
+        "Справка по командам — /help."
     )
 
 
@@ -64,7 +65,8 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         if ctx.onboarded:
             await message.answer(
                 f"С возвращением, {member.full_name}! "
-                "Настройки можно поменять в /settings."
+                "Настройки можно поменять в /settings.\n"
+                "Справка по командам — /help."
             )
             await state.clear()
             return
@@ -193,9 +195,11 @@ async def cb_onboarding_time_custom(callback: CallbackQuery, state: FSMContext) 
 async def cb_onboarding_time(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message is None or callback.data is None:
         return
-    time_str = callback.data.rsplit(":", 1)[-1]
-    hour, minute = map(int, time_str.split(":"))
-    await _save_onboarding_time(callback, state, time(hour, minute))
+    parsed = parse_time_callback_data(callback.data, "ob:tm")
+    if parsed is None:
+        await callback.answer("Не получилось разобрать время.", show_alert=True)
+        return
+    await _save_onboarding_time(callback, state, parsed)
 
 
 @router.message(OnboardingStates.custom_time, F.text)

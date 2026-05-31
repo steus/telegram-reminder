@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import time
-
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -12,7 +10,7 @@ from aiogram.types import CallbackQuery, Message
 from app.bot.dialog_context import DialogContext
 from app.bot.fsm_sync import sync_fsm_from_context
 from app.bot import keyboards as kb
-from app.bot.onboarding_flow import parse_checkin_time, settings_edit_prompt
+from app.bot.onboarding_flow import parse_checkin_time, parse_time_callback_data, settings_edit_prompt
 from app.bot.messages import CUSTOM_TIME_TEXT, UNKNOWN_USER_TEXT
 from app.bot.states import SettingsStates
 from app.db.models import InputMode, Visibility
@@ -139,9 +137,11 @@ async def cb_settings_time_custom(callback: CallbackQuery, state: FSMContext) ->
 async def cb_settings_time(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.data is None:
         return
-    time_str = callback.data.rsplit(":", 1)[-1]
-    hour, minute = map(int, time_str.split(":"))
-    await _apply_settings_choice(callback, state, checkin_time=time(hour, minute))
+    parsed = parse_time_callback_data(callback.data, "st:tm")
+    if parsed is None:
+        await callback.answer("Не получилось разобрать время.", show_alert=True)
+        return
+    await _apply_settings_choice(callback, state, checkin_time=parsed)
 
 
 @router.callback_query(F.data.startswith("st:ping:"))
