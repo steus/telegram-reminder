@@ -34,6 +34,20 @@ cd /opt/bot-tracker
 ./scripts/deploy.sh
 ```
 
+Пересборка образа без `git pull` (код уже на диске, сменился `Dockerfile` / зависимости):
+
+```bash
+./scripts/rebuild.sh
+# жёсткая пересборка без кэша Docker:
+./scripts/rebuild.sh --no-cache
+```
+
+Только перезапуск (смена `.env`, бот «завис») — без pull и без build:
+
+```bash
+./scripts/restart.sh
+```
+
 ## Перенос БД с локали
 
 На **локали** (бот остановлен):

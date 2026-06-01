@@ -3,6 +3,8 @@
 #
 #   ./scripts/deploy.sh --init          # первый раз: .env, каталоги, UID/GID
 #   ./scripts/deploy.sh                 # git pull + пересборка + up -d
+#   ./scripts/rebuild.sh                # пересборка образа без git pull
+#   ./scripts/restart.sh                # только перезапуск bot
 #   ./scripts/deploy.sh --db ./app.db   # залить БД (бот остановится на время копии)
 #   ./scripts/deploy.sh --fix-perms   # только права на data/ по UID/GID из .env
 #   ./scripts/deploy.sh --logs          # tail логов
