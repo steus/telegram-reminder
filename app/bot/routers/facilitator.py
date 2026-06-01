@@ -15,7 +15,7 @@ from app.bot.command_names import (
     CMD_GROUP_SET_PLAUD,
     CMD_GROUP_SYNC_GOALS,
     CMD_GROUP_VIEW_GOALS,
-    CMD_SET_MY_GOALS,
+    CMD_MY_GOALS_SET,
 )
 from app.services.sheet_sync import sync_group_goals_to_sheet
 from app.bot.dialog_context import DialogContext
@@ -296,7 +296,7 @@ async def cmd_paste_transcript(message: Message, state: FSMContext) -> None:
         "2) По частям (@Speaker 1, потом @Степан …) → в конце /"
         f"{CMD_GROUP_PASTE_DONE}.\n"
         f"3) Одна @-секция без /{CMD_GROUP_PASTE_TRANSCRIPT} — тоже сработает "
-        f"(если не вводишь свои задачи через /{CMD_SET_MY_GOALS})."
+        f"(если не вводишь свои задачи через /{CMD_MY_GOALS_SET})."
     )
 
 
@@ -348,7 +348,7 @@ async def handle_facilitator_transcript_text(message: Message, state: FSMContext
         await message.answer(
             f"Это похоже на транскрипт встречи. Для группы — /{CMD_GROUP_PASTE_TRANSCRIPT} "
             "или один блок с несколькими @-заголовками.\n\n"
-            f"Для своих задач — /{CMD_SET_MY_GOALS} и список строк (без @)."
+            f"Для своих задач — /{CMD_MY_GOALS_SET} и список строк (без @)."
         )
         return
 

@@ -14,16 +14,17 @@ from app.bot.command_names import (
     CMD_GROUP_SET_PLAUD,
     CMD_GROUP_SYNC_GOALS,
     CMD_GROUP_VIEW_GOALS,
-    CMD_SET_MY_GOALS,
-    CMD_SYNC_MY_GOALS,
+    CMD_MY_GOALS_SET,
+    CMD_MY_GOALS_SUBMIT,
+    CMD_MY_GOALS_UPDATE,
     CMD_VIEW_MY_GOALS,
 )
 
 _PARTICIPANT_COMMANDS = [
-    BotCommand(command=CMD_SET_MY_GOALS, description="Задать задачи на неделю"),
+    BotCommand(command=CMD_MY_GOALS_SET, description="Задать задачи на неделю"),
     BotCommand(command=CMD_VIEW_MY_GOALS, description="Посмотреть задачи и статусы"),
-    BotCommand(command=CMD_SYNC_MY_GOALS, description="Обновить задачи в таблице"),
-    BotCommand(command="checkin_now", description="Чек-ин вручную (разработка)"),
+    BotCommand(command=CMD_MY_GOALS_SUBMIT, description="Обновить задачи в таблице"),
+    BotCommand(command=CMD_MY_GOALS_UPDATE, description="Обновить статус моих задач"),
     BotCommand(command="settings", description="Видимость, время, пинг"),
     BotCommand(command="stats", description="Прогресс по неделям"),
     BotCommand(command="start", description="Онбординг"),

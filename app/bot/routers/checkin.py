@@ -1,11 +1,11 @@
-"""Чек-ин: callback статусов, текст/голос, /checkin_now (§6.3–6.4 ТЗ)."""
+"""Чек-ин: callback статусов, текст/голос (§6.3–6.4 ТЗ)."""
 
 from __future__ import annotations
 
 import re
 
 from aiogram import F, Router
-from aiogram.filters import BaseFilter, Command
+from aiogram.filters import BaseFilter
 from aiogram.types import CallbackQuery, Message
 
 from app.bot.messages import UNKNOWN_USER_TEXT
@@ -23,7 +23,6 @@ from app.services.checkin import (
     build_checkin_payload,
     load_checkin_tasks,
     on_stuck_status,
-    send_checkin,
 )
 from app.services.summary import (
     build_summary_texts,
@@ -71,19 +70,6 @@ class InCheckin(BaseFilter):
                 return False
             dialog = await get_or_create_dialog_state(session, member.id)
             return dialog.state == DialogStateEnum.checkin
-
-
-@router.message(Command("checkin_now"))
-async def cmd_checkin_now(message: Message) -> None:
-    async with get_session() as session:
-        member = await get_member_by_chat_id(session, message.chat.id)
-        if member is None:
-            await message.answer(UNKNOWN_USER_TEXT)
-            return
-
-    sent = await send_checkin(message.bot, member)
-    if not sent:
-        await message.answer("Не удалось отправить чек-ин — напиши ведущему.")
 
 
 @router.callback_query(F.data.regexp(r"^t:\d+:(done|in_progress|stuck)$"))

@@ -14,8 +14,9 @@ from app.bot.command_names import (
     CMD_GROUP_SET_PLAUD,
     CMD_GROUP_SYNC_GOALS,
     CMD_GROUP_VIEW_GOALS,
-    CMD_SET_MY_GOALS,
-    CMD_SYNC_MY_GOALS,
+    CMD_MY_GOALS_SET,
+    CMD_MY_GOALS_SUBMIT,
+    CMD_MY_GOALS_UPDATE,
     CMD_VIEW_MY_GOALS,
 )
 from app.db.repo import get_group_by_facilitator_chat_id
@@ -32,11 +33,9 @@ async def build_help_text(chat_id: int) -> str:
         "/help — эта справка",
         "",
         "Задачи на неделю:",
-        f"/{CMD_SET_MY_GOALS} — задать задачи (режим private)",
-        f"/{CMD_SYNC_MY_GOALS} — обновить задачи в таблице (вкладка «Прогресс»)",
-        "",
-        "Чек-ин:",
-        "/checkin_now — вручную (для разработки; в проде — по расписанию)",
+        f"/{CMD_MY_GOALS_SET} — задать задачи (режим private)",
+        f"/{CMD_MY_GOALS_SUBMIT} — обновить задачи в таблице (вкладка «Прогресс»)",
+        f"/{CMD_MY_GOALS_UPDATE} — обновить статус моих задач",
     ]
 
     async with get_session() as session:

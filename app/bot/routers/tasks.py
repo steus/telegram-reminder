@@ -1,4 +1,4 @@
-"""Goals: private-ввод, подтверждение, /set_my_goals (§6.2, §6.6 ТЗ)."""
+"""Goals: private-ввод, подтверждение, my_goals_* (§6.2, §6.6 ТЗ)."""
 
 from __future__ import annotations
 
@@ -11,8 +11,9 @@ from aiogram.types import CallbackQuery, Message
 
 from app.bot.dialog_context import DialogContext
 from app.bot.command_names import (
-    CMD_SET_MY_GOALS,
-    CMD_SYNC_MY_GOALS,
+    CMD_MY_GOALS_SET,
+    CMD_MY_GOALS_SUBMIT,
+    CMD_MY_GOALS_UPDATE,
     CMD_VIEW_MY_GOALS,
 )
 from app.bot.messages import UNKNOWN_USER_TEXT
@@ -40,6 +41,7 @@ from app.services.extraction import (
     start_private_goal_collection,
     structure_goals,
 )
+from app.services.checkin import send_checkin
 from app.services.sheet_sync import sync_member_goals_to_sheet
 from app.services.voice import (
     EmptyTranscriptionError,
@@ -86,8 +88,8 @@ async def _show_confirmation(message: Message, member_id: int, week_id: int) -> 
     )
 
 
-@router.message(Command(CMD_SET_MY_GOALS))
-async def cmd_setgoals(message: Message, state: FSMContext) -> None:
+@router.message(Command(CMD_MY_GOALS_SET))
+async def cmd_my_goals_set(message: Message, state: FSMContext) -> None:
     async with get_session() as session:
         member = await get_member_by_chat_id(session, message.chat.id)
         if member is None:
@@ -132,7 +134,7 @@ async def cmd_view_my_goals(message: Message) -> None:
     if not tasks:
         await message.answer(
             "Задач на эту неделю пока нет. "
-            f"Чтобы добавить — /{CMD_SET_MY_GOALS}."
+            f"Чтобы добавить — /{CMD_MY_GOALS_SET}."
         )
         return
 
@@ -142,8 +144,8 @@ async def cmd_view_my_goals(message: Message) -> None:
     )
 
 
-@router.message(Command(CMD_SYNC_MY_GOALS))
-async def cmd_sync_my_goals(message: Message) -> None:
+@router.message(Command(CMD_MY_GOALS_SUBMIT))
+async def cmd_my_goals_submit(message: Message) -> None:
     async with get_session() as session:
         member = await get_member_by_chat_id(session, message.chat.id)
         if member is None:
@@ -152,6 +154,19 @@ async def cmd_sync_my_goals(message: Message) -> None:
         result = await sync_member_goals_to_sheet(session, member)
 
     await message.answer(result.message)
+
+
+@router.message(Command(CMD_MY_GOALS_UPDATE))
+async def cmd_my_goals_update(message: Message) -> None:
+    async with get_session() as session:
+        member = await get_member_by_chat_id(session, message.chat.id)
+        if member is None:
+            await message.answer(UNKNOWN_USER_TEXT)
+            return
+
+    sent = await send_checkin(message.bot, member)
+    if not sent:
+        await message.answer("Не удалось отправить чек-ин — напиши ведущему.")
 
 
 @router.message(InTaskInput())

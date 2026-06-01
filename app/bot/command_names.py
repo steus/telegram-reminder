@@ -1,12 +1,13 @@
 """Имена команд Telegram — участник vs ведущий группы.
 
-Паттерн: set_* / view_* / sync_* + goals; group_* для ведущего.
+Паттерн: my_goals_* / view_my_goals; group_* для ведущего.
 """
 
 # --- Участник: goals ---
-CMD_SET_MY_GOALS = "set_my_goals"
+CMD_MY_GOALS_SET = "my_goals_set"
 CMD_VIEW_MY_GOALS = "view_my_goals"
-CMD_SYNC_MY_GOALS = "sync_my_goals"
+CMD_MY_GOALS_SUBMIT = "my_goals_submit"
+CMD_MY_GOALS_UPDATE = "my_goals_update"
 
 # --- Ведущий: goals из транскрипта (Plaud) ---
 CMD_GROUP_PASTE_TRANSCRIPT = "group_paste_transcript"

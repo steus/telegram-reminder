@@ -46,7 +46,7 @@
 - **После этапа 3:** планировщик — **одна минутная джоба** `minute_tick` (не per-member):
   в tz участника сверяет день/время чек-ина и (день+1)/время постановки задач.
   Дедуп слотов в `dialog_state.context_json.scheduler_sent`. Чек-ин: `app/services/checkin.py`,
-  callback `t:{id}:{status}`, роутер `checkin`, `/checkin_now`. Затык — TODO в `on_stuck_status`.
+  callback `t:{id}:{status}`, роутер `checkin`, `/my_goals_update`. Затык — TODO в `on_stuck_status`.
   Постановка private — `app/services/goal_setup.py`. **Этап 4:** в ту же `_tick` ветку `auto`.
 - **После этапа 4:** `app/llm/` — `ask_llm` + фолбэк (тест `tests/test_llm_fallback.py`).
   Plaud: `app/services/plaud.py` (API-каркас → scrape → ручная вставка). Транскрипт
