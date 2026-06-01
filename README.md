@@ -233,18 +233,19 @@ python -c "import sqlite3; print(sqlite3.connect('data/app.db').execute(\
 
 ## Деплой на VPS (Docker, основной путь)
 
-1. На сервере: клонировать репозиторий, перейти в каталог проекта.
-2. Скопировать и заполнить `.env` (токен бота, `UID`/`GID` = `id -u` / `id -g`,
-   при слабом VPS — `WHISPER_MODE=api`).
-3. Создать каталог данных: `mkdir -p data backups`.
-4. Запуск:
+**Краткая инструкция:** [`docs/DEPLOY.md`](./docs/DEPLOY.md).
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+git clone <repo> /opt/bot-tracker && cd /opt/bot-tracker
+./scripts/deploy.sh --init          # .env + UID/GID
+nano .env                           # токен, LLM, Sheets…
+./scripts/deploy.sh                 # pull + build + up -d
+./scripts/deploy.sh --logs          # проверка
 ```
 
-5. Логи: `docker compose logs -f bot`
-6. Рестарт при падении: `restart: always` в `docker-compose.prod.yml`.
+Обновление после push: `./scripts/deploy.sh`.  
+БД с локали: `./scripts/deploy.sh --db /path/to/app.db`.  
+Права на `data/`: `./scripts/deploy.sh --fix-perms`.
 
 **Whisper в проде:** либо смонтировать бинарь и модель в `docker-compose.yml`
 (см. комментарий в файле), либо `WHISPER_MODE=api` и `OPENAI_API_KEY` в `.env`.
