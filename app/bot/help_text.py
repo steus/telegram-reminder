@@ -34,9 +34,9 @@ async def build_help_text(chat_id: int) -> str:
         "Задачи на неделю:",
         f"/{CMD_MY_GOALS_SET} — задать задачи (режим private)",
         f"/{CMD_MY_GOALS_VIEW} — задачи и статусы на эту неделю",
-        f"/{CMD_MY_GOALS_SUBMIT} — обновить задачи в таблице (вкладка «Прогресс»)",
         f"/{CMD_MY_GOALS_UPDATE} — обновить статус моих задач",
         f"/{CMD_MY_GOALS_STATS} — прогресс по неделям (серия, % выполнения)",
+        f"/{CMD_MY_GOALS_SUBMIT} — обновить задачи в таблице (вкладка «Прогресс»)",
     ]
 
     async with get_session() as session:
