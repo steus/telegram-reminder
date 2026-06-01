@@ -15,7 +15,7 @@ from app.db.repo import (
     list_active_members_for_group,
     list_tasks_for_member_week,
 )
-from app.services.sheets import upsert_member_progress
+from app.services.sheets import spreadsheet_edit_url, upsert_member_progress
 
 
 @dataclass
@@ -72,11 +72,13 @@ async def sync_member_goals_to_sheet(
     if not written:
         return SheetSyncResult(ok=False, message=_no_creds_message())
 
+    sheet_url = spreadsheet_edit_url(group.sheet_id)
     return SheetSyncResult(
         ok=True,
         message=(
             f"Обновил твои задачи на вкладке «Прогресс» "
-            f"(неделя с {week.start_date.strftime('%d.%m.%Y')})."
+            f"(неделя с {week.start_date.strftime('%d.%m.%Y')}).\n"
+            f"{sheet_url}"
         ),
         synced_count=1,
     )
@@ -128,7 +130,10 @@ async def sync_group_goals_to_sheet(
             message="У участников с видимостью «Группе» нет задач на эту неделю.",
         )
 
-    note = f"Обновил задачи {synced} участник(ов) на вкладке «Прогресс»."
+    note = (
+        f"Обновил задачи {synced} участник(ов) на вкладке «Прогресс».\n"
+        f"{spreadsheet_edit_url(group.sheet_id)}"
+    )
     if skipped_empty:
-        note += f" Без задач на неделе: {skipped_empty}."
+        note += f"\nБез задач на неделе: {skipped_empty}."
     return SheetSyncResult(ok=True, message=note, synced_count=synced)

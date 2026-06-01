@@ -16,6 +16,12 @@ logger = logging.getLogger(__name__)
 
 _PROGRESS_TAB = "Прогресс"
 
+
+def spreadsheet_edit_url(sheet_id: str) -> str:
+    """Публичная ссылка на таблицу группы (открывается в браузере)."""
+    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
+
+
 _SUMMARY_HEADERS = (
     "Неделя",
     "Участник",
