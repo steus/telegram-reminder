@@ -467,7 +467,7 @@ async def list_tasks_for_member_week(
 async def list_tasks_with_weeks_for_member(
     session: AsyncSession, member_id: int
 ) -> list[Task]:
-    """Все задачи участника с подгруженной неделей (для /stats)."""
+    """Все задачи участника с подгруженной неделей (для my_goals_stats)."""
     result = await session.execute(
         select(Task)
         .where(Task.member_id == member_id)

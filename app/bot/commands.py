@@ -15,6 +15,7 @@ from app.bot.command_names import (
     CMD_GROUP_SYNC_GOALS,
     CMD_GROUP_VIEW_GOALS,
     CMD_MY_GOALS_SET,
+    CMD_MY_GOALS_STATS,
     CMD_MY_GOALS_SUBMIT,
     CMD_MY_GOALS_UPDATE,
     CMD_MY_GOALS_VIEW,
@@ -25,8 +26,8 @@ _PARTICIPANT_COMMANDS = [
     BotCommand(command=CMD_MY_GOALS_VIEW, description="Задачи и статусы на эту неделю"),
     BotCommand(command=CMD_MY_GOALS_SUBMIT, description="Обновить задачи в таблице"),
     BotCommand(command=CMD_MY_GOALS_UPDATE, description="Обновить статус моих задач"),
+    BotCommand(command=CMD_MY_GOALS_STATS, description="Прогресс по неделям"),
     BotCommand(command="settings", description="Видимость, время, пинг"),
-    BotCommand(command="stats", description="Прогресс по неделям"),
     BotCommand(command="start", description="Онбординг"),
     BotCommand(command="help", description="Справка по командам"),
 ]

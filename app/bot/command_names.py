@@ -6,8 +6,9 @@
 # --- Участник: goals ---
 CMD_MY_GOALS_SET = "my_goals_set"
 CMD_MY_GOALS_VIEW = "my_goals_view"
-CMD_MY_GOALS_SUBMIT = "my_goals_submit"
 CMD_MY_GOALS_UPDATE = "my_goals_update"
+CMD_MY_GOALS_STATS = "my_goals_stats"
+CMD_MY_GOALS_SUBMIT = "my_goals_submit"
 
 # --- Ведущий: goals из транскрипта (Plaud) ---
 CMD_GROUP_PASTE_TRANSCRIPT = "group_paste_transcript"

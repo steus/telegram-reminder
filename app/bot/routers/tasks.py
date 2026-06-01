@@ -12,6 +12,7 @@ from aiogram.types import CallbackQuery, Message
 from app.bot.dialog_context import DialogContext
 from app.bot.command_names import (
     CMD_MY_GOALS_SET,
+    CMD_MY_GOALS_STATS,
     CMD_MY_GOALS_SUBMIT,
     CMD_MY_GOALS_UPDATE,
     CMD_MY_GOALS_VIEW,
@@ -29,6 +30,7 @@ from app.db.repo import (
     get_or_create_current_week,
     get_or_create_dialog_state,
     list_tasks_for_member_week,
+    list_tasks_with_weeks_for_member,
     replace_tasks,
     set_dialog_state,
     set_tasks_confirmed,
@@ -43,6 +45,7 @@ from app.services.extraction import (
 )
 from app.services.checkin import send_checkin
 from app.services.sheet_sync import sync_member_goals_to_sheet
+from app.services.stats import compute_member_progress, format_stats_message
 from app.services.voice import (
     EmptyTranscriptionError,
     VOICE_NOTHING_HEARD,
@@ -167,6 +170,25 @@ async def cmd_my_goals_update(message: Message) -> None:
     sent = await send_checkin(message.bot, member)
     if not sent:
         await message.answer("Не удалось отправить чек-ин — напиши ведущему.")
+
+
+@router.message(Command(CMD_MY_GOALS_STATS))
+async def cmd_my_goals_stats(message: Message) -> None:
+    async with get_session() as session:
+        member = await get_member_by_chat_id(session, message.chat.id)
+        if member is None:
+            await message.answer(UNKNOWN_USER_TEXT)
+            return
+        dialog = await get_or_create_dialog_state(session, member.id)
+        ctx = DialogContext.from_json(dialog.context_json)
+        if not ctx.onboarded:
+            await message.answer("Сначала давай закончим знакомство — нажми /start.")
+            return
+        current_week = await get_or_create_current_week(session, member.group_id)
+        tasks = await list_tasks_with_weeks_for_member(session, member.id)
+
+    progress = compute_member_progress(tasks, current_week=current_week)
+    await message.answer(format_stats_message(progress))
 
 
 @router.message(InTaskInput())
