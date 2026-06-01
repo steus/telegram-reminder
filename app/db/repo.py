@@ -9,6 +9,7 @@ from typing import Any
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.models import (
     DialogState,
@@ -459,6 +460,20 @@ async def list_tasks_for_member_week(
         select(Task)
         .where(Task.member_id == member_id, Task.week_id == week_id)
         .order_by(Task.position)
+    )
+    return list(result.scalars().all())
+
+
+async def list_tasks_with_weeks_for_member(
+    session: AsyncSession, member_id: int
+) -> list[Task]:
+    """Все задачи участника с подгруженной неделей (для /stats)."""
+    result = await session.execute(
+        select(Task)
+        .where(Task.member_id == member_id)
+        .options(selectinload(Task.week))
+        .join(Week, Task.week_id == Week.id)
+        .order_by(Week.start_date, Task.position)
     )
     return list(result.scalars().all())
 

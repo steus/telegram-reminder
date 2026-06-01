@@ -4,9 +4,9 @@ Telegram-бот для недельного peer-accountability трекинга
 Тон бота — поддерживающий напарник, а не контролёр. Полное ТЗ — в
 [`TZ_bot_tracker.md`](./TZ_bot_tracker.md), план сборки по этапам — в [`plan/`](./plan).
 
-Текущий статус: **этап 4 — LLM и auto-извлечение** (`/paste_transcript`, `/set_plaud_url`,
-режим `auto`, LLM-структурирование в `private`). Также: `/setgoals`, `/tasks`,
-`/checkin_now`, APScheduler.
+Текущий статус: **этап 7 — прогресс и деплой**. Полный поток: онбординг, задачи
+(ручной и auto из Plaud), чек-ин, декомпозиция, голос, итоги и Sheets, `/stats`,
+midweek-пинг, прод через Docker Compose.
 
 ## Стек
 
@@ -132,7 +132,7 @@ docker compose up -d
 | `/setgoals` | Поставить цели на неделю вручную (режим **private**) |
 | `/tasks` | Список задач текущей недели со статусами |
 | `/checkin_now` | Чек-ин вручную (для разработки; в проде — по расписанию) |
-| `/stats` | Прогресс по неделям *(этап 7)* |
+| `/stats` | Серия недель, % выполнения, частые затыки |
 
 **Режим ввода задач** (`/settings` → «Способ ввода»):
 
@@ -231,10 +231,42 @@ python -c "import sqlite3; print(sqlite3.connect('data/app.db').execute(\
   'select name from sqlite_master where type=\"table\"').fetchall())"
 ```
 
-## Деплой на VPS
+## Деплой на VPS (Docker, основной путь)
+
+1. На сервере: клонировать репозиторий, перейти в каталог проекта.
+2. Скопировать и заполнить `.env` (токен бота, `UID`/`GID` = `id -u` / `id -g`,
+   при слабом VPS — `WHISPER_MODE=api`).
+3. Создать каталог данных: `mkdir -p data backups`.
+4. Запуск:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
-Подробности (systemd-альтернатива, бэкапы) — на этапе 7 плана.
+5. Логи: `docker compose logs -f bot`
+6. Рестарт при падении: `restart: always` в `docker-compose.prod.yml`.
+
+**Whisper в проде:** либо смонтировать бинарь и модель в `docker-compose.yml`
+(см. комментарий в файле), либо `WHISPER_MODE=api` и `OPENAI_API_KEY` в `.env`.
+
+### Бэкапы БД
+
+Скрипт `scripts/backup_db.sh` копирует `data/app.db` в `./backups/` (ротация 14 дней).
+
+```bash
+./scripts/backup_db.sh
+```
+
+Пример cron на хосте (ежедневно в 03:00):
+
+```cron
+0 3 * * * cd /opt/bot-tracker && ./scripts/backup_db.sh >> /var/log/bot-tracker-backup.log 2>&1
+```
+
+При Docker том `./data` остаётся на хосте — бэкап запускается с хоста по тому же пути.
+
+### Альтернатива: systemd без Docker
+
+См. `deploy/bot-tracker.service`: venv в `/opt/bot-tracker`, `EnvironmentFile=.env`,
+автозапуск и рестарт, логи в `journalctl -u bot-tracker -f`. Перед первым запуском:
+`alembic upgrade head`, права на `data/` для пользователя сервиса.

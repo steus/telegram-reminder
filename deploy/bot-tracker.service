@@ -1,0 +1,31 @@
+# systemd-юнит (альтернатива Docker, §14 ТЗ).
+#
+# Установка (пример):
+#   sudo useradd -r -m -d /opt/bot-tracker bottracker   # если пользователя ещё нет
+#   sudo git clone … /opt/bot-tracker && cd /opt/bot-tracker
+#   sudo -u bottracker python3.12 -m venv .venv
+#   sudo -u bottracker .venv/bin/pip install -e .
+#   sudo cp deploy/bot-tracker.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now bot-tracker
+#
+# Логи: journalctl -u bot-tracker -f
+
+[Unit]
+Description=Bot Tracker — Telegram peer accountability bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bottracker
+Group=bottracker
+WorkingDirectory=/opt/bot-tracker
+EnvironmentFile=/opt/bot-tracker/.env
+ExecStart=/opt/bot-tracker/.venv/bin/python -m app.main
+Restart=always
+RestartSec=5
+# SQLite в ./data — каталог должен принадлежать bottracker
+ReadWritePaths=/opt/bot-tracker/data
+
+[Install]
+WantedBy=multi-user.target

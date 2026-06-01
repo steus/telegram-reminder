@@ -1,11 +1,19 @@
-# Прод-оверрайд (детально допиливается на этапе 7).
-# Запуск:
+# Прод-оверрайд. Запуск:
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 services:
   bot:
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          memory: 256M
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+    # ./data и .env наследуются из docker-compose.yml
+    # Whisper local: раскомментируй том в docker-compose.yml, либо WHISPER_MODE=api в .env

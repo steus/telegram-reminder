@@ -18,6 +18,7 @@ env/
 # Secrets / runtime data
 .env
 data/
+backups/
 *.db
 *.sqlite
 *.sqlite3

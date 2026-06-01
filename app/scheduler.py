@@ -14,6 +14,7 @@ from app.db.repo import list_active_members
 from app.db.session import get_session
 from app.services.checkin import mark_scheduler_slot_sent, send_checkin, was_scheduler_slot_sent
 from app.services.goal_setup import send_scheduled_goal_setup
+from app.services.midweek import send_midweek_ping
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,11 @@ _TICK_JOB_ID = "minute_tick"
 def meeting_weekday(checkin_weekday: int) -> int:
     """День встречи: чек-ин накануне → встреча на следующий день недели."""
     return (checkin_weekday + 1) % 7
+
+
+def midweek_weekday(checkin_weekday: int) -> int:
+    """Середина недели: ~3 дня после встречи, до следующего чек-ина."""
+    return (meeting_weekday(checkin_weekday) + 3) % 7
 
 
 def slot_key(member_id: int, local_now: datetime, kind: str) -> str:
@@ -74,6 +80,19 @@ async def _tick(bot: Bot) -> None:
             except Exception:
                 logger.exception("Goal setup failed for member_id=%s", member.id)
 
+        if member.midweek_ping and _matches_schedule(
+            local, midweek_weekday(member.checkin_weekday), member.checkin_time
+        ):
+            key = slot_key(member.id, local, "midweek")
+            async with get_session() as session:
+                if await was_scheduler_slot_sent(session, member.id, key):
+                    continue
+                await mark_scheduler_slot_sent(session, member.id, key)
+            try:
+                await send_midweek_ping(bot, member)
+            except Exception:
+                logger.exception("Midweek ping failed for member_id=%s", member.id)
+
 
 def create_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler()
@@ -87,6 +106,6 @@ def create_scheduler(bot: Bot) -> AsyncIOScheduler:
         coalesce=True,
     )
     logger.info(
-        "Scheduler: registered minute tick job (check-in + goal setup per member tz)"
+        "Scheduler: minute tick (check-in, goal setup, midweek ping per member tz)"
     )
     return scheduler
