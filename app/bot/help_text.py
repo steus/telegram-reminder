@@ -17,7 +17,7 @@ from app.bot.command_names import (
     CMD_MY_GOALS_SET,
     CMD_MY_GOALS_SUBMIT,
     CMD_MY_GOALS_UPDATE,
-    CMD_VIEW_MY_GOALS,
+    CMD_MY_GOALS_VIEW,
 )
 from app.db.repo import get_group_by_facilitator_chat_id
 from app.db.session import get_session
@@ -27,13 +27,13 @@ async def build_help_text(chat_id: int) -> str:
     lines = [
         "Основное:",
         "/start — онбординг и настройки с нуля",
-        f"/{CMD_VIEW_MY_GOALS} — задачи и статусы на эту неделю",
         "/stats — прогресс по неделям (серия, % выполнения)",
         "/settings — видимость, время чек-ина, пинг в середине недели",
         "/help — эта справка",
         "",
         "Задачи на неделю:",
         f"/{CMD_MY_GOALS_SET} — задать задачи (режим private)",
+        f"/{CMD_MY_GOALS_VIEW} — задачи и статусы на эту неделю",
         f"/{CMD_MY_GOALS_SUBMIT} — обновить задачи в таблице (вкладка «Прогресс»)",
         f"/{CMD_MY_GOALS_UPDATE} — обновить статус моих задач",
     ]

@@ -14,7 +14,7 @@ from app.bot.command_names import (
     CMD_MY_GOALS_SET,
     CMD_MY_GOALS_SUBMIT,
     CMD_MY_GOALS_UPDATE,
-    CMD_VIEW_MY_GOALS,
+    CMD_MY_GOALS_VIEW,
 )
 from app.bot.messages import UNKNOWN_USER_TEXT
 from app.bot.states import TaskStates
@@ -115,8 +115,8 @@ async def cmd_my_goals_set(message: Message, state: FSMContext) -> None:
     await message.answer(GOAL_COLLECTION_PROMPT)
 
 
-@router.message(Command(CMD_VIEW_MY_GOALS))
-async def cmd_view_my_goals(message: Message) -> None:
+@router.message(Command(CMD_MY_GOALS_VIEW))
+async def cmd_my_goals_view(message: Message) -> None:
     async with get_session() as session:
         member = await get_member_by_chat_id(session, message.chat.id)
         if member is None:
