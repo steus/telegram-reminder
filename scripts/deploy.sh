@@ -5,45 +5,31 @@
 #   ./scripts/deploy.sh                 # git pull + пересборка + up -d
 #   ./scripts/rebuild.sh                # пересборка образа без git pull
 #   ./scripts/restart.sh                # только перезапуск bot
-#   ./scripts/deploy.sh --db ./app.db   # залить БД (бот остановится на время копии)
+#   ./scripts/restore_db.sh FILE        # заменить data/app.db (отдельно от deploy)
 #   ./scripts/deploy.sh --fix-perms   # только права на data/ по UID/GID из .env
 #   ./scripts/deploy.sh --logs          # tail логов
 #   ./scripts/deploy.sh --status        # ps + health check data writable
 #
+# git pull не меняет data/app.db (каталог data/ в .gitignore).
+#
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT"
-
-COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml)
+# shellcheck source=scripts/deploy_lib.sh
+source "$(cd "$(dirname "$0")" && pwd)/deploy_lib.sh"
+_deploy_lib_init
 
 usage() {
-  sed -n '3,12p' "$0" | sed 's/^# \?//'
+  sed -n '3,14p' "$0" | sed 's/^# \?//'
   exit "${1:-0}"
 }
 
-_read_env_var() {
-  local key="$1" default="${2:-}"
-  if [[ -f .env ]]; then
-    local val
-    val="$(grep -E "^${key}=" .env | tail -1 | cut -d= -f2- || true)"
-    if [[ -n "$val" ]]; then
-      echo "$val"
-      return
-    fi
+_check_token() {
+  local token
+  token="$(_read_env_var TELEGRAM_BOT_TOKEN)"
+  if [[ -z "$token" ]]; then
+    echo "ERROR: TELEGRAM_BOT_TOKEN is empty in .env" >&2
+    exit 1
   fi
-  echo "$default"
-}
-
-_ensure_docker() {
-  command -v docker >/dev/null 2>&1 || {
-    echo "ERROR: docker not found" >&2
-    exit 1
-  }
-  docker compose version >/dev/null 2>&1 || {
-    echo "ERROR: docker compose plugin not found" >&2
-    exit 1
-  }
 }
 
 _init_env() {
@@ -70,51 +56,15 @@ _init_env() {
   echo "Then: ./scripts/deploy.sh"
 }
 
-_check_token() {
-  local token
-  token="$(_read_env_var TELEGRAM_BOT_TOKEN)"
-  if [[ -z "$token" ]]; then
-    echo "ERROR: TELEGRAM_BOT_TOKEN is empty in .env" >&2
-    exit 1
-  fi
-}
-
-_fix_perms() {
-  local uid gid
-  uid="$(_read_env_var UID "$(id -u)")"
-  gid="$(_read_env_var GID "$(id -g)")"
-  mkdir -p data backups
-  chown -R "${uid}:${gid}" data backups
-  chmod 755 data backups
-  if [[ -f data/app.db ]]; then
-    chmod 664 data/app.db
-  fi
-  rm -f data/app.db-shm data/app.db-wal
-  echo "Permissions: data/ backups/ → ${uid}:${gid}"
-}
-
-_copy_db() {
-  local src="$1"
-  if [[ ! -f "$src" ]]; then
-    echo "ERROR: file not found: $src" >&2
-    exit 1
-  fi
-  "${COMPOSE[@]}" stop bot 2>/dev/null || true
-  mkdir -p data
-  cp -a "$src" data/app.db
-  rm -f data/app.db-shm data/app.db-wal
-  _fix_perms
-  echo "Database copied to data/app.db"
-}
-
 _up() {
   _check_token
-  _fix_perms
+  _fix_data_perms
   if [[ -d .git ]]; then
     echo "git pull..."
     git pull --ff-only
   fi
   echo "Building and starting containers..."
+  echo "(data/app.db on host is unchanged — use ./scripts/restore_db.sh to replace it)"
   "${COMPOSE[@]}" up -d --build
   echo ""
   echo "OK. Logs: ./scripts/deploy.sh --logs"
@@ -137,6 +87,9 @@ _status() {
     echo "WARN: data/ not writable — run ./scripts/deploy.sh --fix-perms"
   fi
   echo "Container runs as UID/GID from .env: ${uid}/${gid}"
+  if [[ -f data/app.db ]]; then
+    echo "Database: data/app.db ($(stat -c '%y' data/app.db 2>/dev/null || stat -f '%Sm' data/app.db))"
+  fi
 }
 
 _logs() {
@@ -150,14 +103,12 @@ main() {
   case "$cmd" in
     -h|--help|help) usage 0 ;;
     --init) _init_env ;;
-    --fix-perms) _fix_perms ;;
+    --fix-perms) _fix_data_perms ;;
     --db)
-      [[ -n "${2:-}" ]] || {
-        echo "Usage: ./scripts/deploy.sh --db /path/to/app.db" >&2
-        exit 1
-      }
-      _copy_db "$2"
-      _up
+      echo "ERROR: --db removed from deploy.sh (it looked like deploy overwrote the DB)." >&2
+      echo "Replace database explicitly:" >&2
+      echo "  ./scripts/restore_db.sh /path/to/backup.db" >&2
+      exit 1
       ;;
     --logs) _logs ;;
     --status) _status ;;

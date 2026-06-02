@@ -4,8 +4,9 @@
 #   ./scripts/restart.sh          # docker compose restart bot
 #   ./scripts/restart.sh --logs   # tail логов после рестарта
 #
-# Обновление с git pull: ./scripts/deploy.sh
+# Обновление с git pull: ./scripts/deploy.sh (БД не трогает)
 # Пересборка без pull: ./scripts/rebuild.sh
+# Замена data/app.db: ./scripts/restore_db.sh
 # После смены только .env или «подвис» бот — достаточно этого скрипта.
 #
 set -euo pipefail

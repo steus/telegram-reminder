@@ -245,8 +245,15 @@ nano .env                           # токен, LLM, Sheets…
 ./scripts/deploy.sh --logs          # проверка
 ```
 
-Обновление после push: `./scripts/deploy.sh`.  
-БД с локали: `./scripts/deploy.sh --db /path/to/app.db`.  
+| Задача | Скрипт |
+|--------|--------|
+| Обновить код после `git push` | `./scripts/deploy.sh` |
+| Пересобрать образ без pull | `./scripts/rebuild.sh` |
+| Перезапуск (`.env`, завис бот) | `./scripts/restart.sh` |
+| Заменить `data/app.db` дампом | `./scripts/restore_db.sh /path/to/backup.db` |
+| Бэкап БД | `./scripts/backup_db.sh` |
+
+`deploy` / `rebuild` / `restart` **не меняют** `data/app.db` (`data/` в `.gitignore`).  
 Права на `data/`: `./scripts/deploy.sh --fix-perms`.
 
 **Whisper в проде:** либо смонтировать бинарь и модель в `docker-compose.yml`

@@ -1,6 +1,23 @@
 # Деплой на VPS (кратко)
 
-Один скрипт: [`scripts/deploy.sh`](../scripts/deploy.sh).
+Скрипты в [`scripts/`](../scripts/). БД на хосте: `./data/app.db` (том Docker, в git не попадает).
+
+## Какой скрипт когда
+
+| Скрипт | git pull | build | `data/app.db` |
+|--------|----------|-------|----------------|
+| [`deploy.sh`](../scripts/deploy.sh) | да | да | **не меняет** |
+| [`rebuild.sh`](../scripts/rebuild.sh) | нет | да | **не меняет** |
+| [`restart.sh`](../scripts/restart.sh) | нет | нет | **не меняет** |
+| [`restore_db.sh`](../scripts/restore_db.sh) | нет | нет | **заменяет** файлом-дампом |
+| [`backup_db.sh`](../scripts/backup_db.sh) | — | — | копия в `./backups/` |
+
+После изменения только `.env` или если бот «завис» — достаточно `restart.sh`.  
+После `git push` с новым кодом — `deploy.sh` (или `rebuild.sh`, если pull уже сделали вручную).  
+Залить дамп с локали — только `restore_db.sh`, **не** смешивать с обычным deploy.
+
+> Раньше было `deploy.sh --db` — убрано, чтобы не путать с обновлением кода.  
+> `deploy.sh` больше не удаляет `app.db-wal` / `app.db-shm` при работающем боте.
 
 ## Первый раз на сервере
 
@@ -42,13 +59,21 @@ cd /opt/bot-tracker
 ./scripts/rebuild.sh --no-cache
 ```
 
-Только перезапуск (смена `.env`, бот «завис») — без pull и без build:
+Только перезапуск контейнера:
 
 ```bash
 ./scripts/restart.sh
 ```
 
+Проверка контейнера и даты БД на диске:
+
+```bash
+./scripts/deploy.sh --status
+```
+
 ## Перенос БД с локали
+
+`git pull` и `./scripts/deploy.sh` **не заменяют** `data/app.db`.
 
 На **локали** (бот остановлен):
 
@@ -61,18 +86,22 @@ scp backups/app_*.db user@vps:/opt/bot-tracker/
 
 ```bash
 cd /opt/bot-tracker
-./scripts/deploy.sh --db /opt/bot-tracker/app_20260601.db
+./scripts/restore_db.sh /opt/bot-tracker/app_20260601.db
 ```
 
-Скрипт сам остановит бота, скопирует файл, уберёт `-wal`/`-shm`, выставит права и поднимет контейнер.
+Опции: `--no-backup` (не копировать текущую БД в `backups/`), `--no-start` (только заменить файл).
+
+Скрипт остановит бота, по умолчанию сделает бэкап текущей БД, скопирует дамп, уберёт `-wal`/`-shm`, выставит права и поднимет контейнер.
 
 ## Частые проблемы
 
 | Симптом | Решение |
 |---------|---------|
+| Код на сервере старый после deploy | Нужен **build**, не только `restart.sh` — `./scripts/rebuild.sh` или `./scripts/deploy.sh` |
 | `/app/data is not writable` | `./scripts/deploy.sh --fix-perms` или выровнять `UID`/`GID` в `.env` с `id -u` / `id -g` |
 | «Нет активной группы» | `seed_member.py` или invite `/group_invite` |
 | `database is locked` | `docker compose stop bot`, закрыть DB Browser, `./scripts/deploy.sh` |
+| БД «откатилась» после deploy | Обычный deploy БД не трогает; проверь, не вызывался ли `restore_db.sh` или старый `deploy.sh --db` |
 
 ## Бэкапы
 
