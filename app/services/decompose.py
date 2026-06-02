@@ -106,6 +106,15 @@ async def continue_decompose_dialog(
     if task is None:
         return "Не нашёл задачу для декомпозиции."
 
+    manual_steps = _lines_to_steps(user_text)
+    if ctx.decompose_steps is not None or ctx.decompose_awaiting_edit:
+        if manual_steps:
+            ctx.set_decompose_steps(manual_steps)
+            await update_dialog_context(session, member.id, ctx.to_json())
+            return format_steps_confirmation(manual_steps)
+        if ctx.decompose_awaiting_edit:
+            return DECOMPOSE_NO_STEPS
+
     ctx.append_checkin_message("user", user_text)
     history = ctx.checkin_messages or []
     messages = [
@@ -118,12 +127,6 @@ async def continue_decompose_dialog(
         ctx.set_decompose_steps(steps)
         await update_dialog_context(session, member.id, ctx.to_json())
         return format_steps_confirmation(steps)
-
-    manual_steps = _lines_to_steps(user_text)
-    if manual_steps:
-        ctx.set_decompose_steps(manual_steps)
-        await update_dialog_context(session, member.id, ctx.to_json())
-        return format_steps_confirmation(manual_steps)
 
     reply = raw.strip() or DECOMPOSE_NO_STEPS
     ctx.append_checkin_message("assistant", reply)

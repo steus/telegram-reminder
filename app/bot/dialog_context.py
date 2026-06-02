@@ -22,6 +22,7 @@ class DialogContext:
     checkin_messages: list[dict[str, str]] | None = None
     decompose_task_id: int | None = None
     decompose_steps: list[str] | None = None
+    decompose_awaiting_edit: bool = False
     pending_summary_week_id: int | None = None
     pending_summary_member_text: str | None = None
     pending_summary_facilitator_text: str | None = None
@@ -44,6 +45,7 @@ class DialogContext:
             checkin_messages=_parse_message_list(data.get("checkin_messages")),
             decompose_task_id=data.get("decompose_task_id"),
             decompose_steps=_parse_str_list(data.get("decompose_steps")),
+            decompose_awaiting_edit=bool(data.get("decompose_awaiting_edit", False)),
             pending_summary_week_id=data.get("pending_summary_week_id"),
             pending_summary_member_text=data.get("pending_summary_member_text"),
             pending_summary_facilitator_text=data.get("pending_summary_facilitator_text"),
@@ -132,10 +134,15 @@ class DialogContext:
 
     def set_decompose_steps(self, steps: list[str]) -> None:
         self.decompose_steps = steps
+        self.decompose_awaiting_edit = False
+
+    def start_decompose_edit(self) -> None:
+        self.decompose_awaiting_edit = True
 
     def clear_decompose(self) -> None:
         self.decompose_task_id = None
         self.decompose_steps = None
+        self.decompose_awaiting_edit = False
 
     def set_pending_summary(
         self,

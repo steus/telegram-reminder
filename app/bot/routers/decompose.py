@@ -136,6 +136,10 @@ async def cb_decompose_edit(callback: CallbackQuery) -> None:
         if member is None:
             await callback.answer("Не нашёл тебя в группе.", show_alert=True)
             return
+        dialog = await get_or_create_dialog_state(session, member.id)
+        ctx = DialogContext.from_json(dialog.context_json)
+        ctx.start_decompose_edit()
+        await update_dialog_context(session, member.id, ctx.to_json())
 
     await callback.answer()
     await callback.message.edit_reply_markup(reply_markup=None)
