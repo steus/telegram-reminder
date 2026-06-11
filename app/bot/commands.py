@@ -6,14 +6,7 @@ from aiogram import Bot
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat
 
 from app.bot.command_names import (
-    CMD_GROUP_INVITE,
-    CMD_GROUP_MEMBERS,
-    CMD_GROUP_PASTE_DONE,
-    CMD_GROUP_PASTE_TRANSCRIPT,
-    CMD_GROUP_REQUESTS,
-    CMD_GROUP_SET_PLAUD,
-    CMD_GROUP_SYNC_GOALS,
-    CMD_GROUP_VIEW_GOALS,
+    CMD_GROUP,
     CMD_MY_GOALS_SET,
     CMD_MY_GOALS_STATS,
     CMD_MY_GOALS_SUBMIT,
@@ -33,14 +26,7 @@ _PARTICIPANT_COMMANDS = [
 ]
 
 _FACILITATOR_EXTRA = [
-    BotCommand(command=CMD_GROUP_INVITE, description="Ссылка-приглашение в группу"),
-    BotCommand(command=CMD_GROUP_MEMBERS, description="Участники и ведущие"),
-    BotCommand(command=CMD_GROUP_REQUESTS, description="Заявки на вступление"),
-    BotCommand(command=CMD_GROUP_PASTE_TRANSCRIPT, description="Вставить «План действий»"),
-    BotCommand(command=CMD_GROUP_PASTE_DONE, description="Завершить вставку транскрипта"),
-    BotCommand(command=CMD_GROUP_SET_PLAUD, description="Ссылка на Plaud"),
-    BotCommand(command=CMD_GROUP_VIEW_GOALS, description="Задачи и статусы группы"),
-    BotCommand(command=CMD_GROUP_SYNC_GOALS, description="Обновить задачи группы в таблице"),
+    BotCommand(command=CMD_GROUP, description="Меню ведущего"),
 ]
 
 

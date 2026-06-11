@@ -9,13 +9,20 @@ from aiogram.filters import BaseFilter, Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from app.bot import keyboards as kb
 from app.bot.command_names import (
+    CMD_GROUP,
     CMD_GROUP_PASTE_DONE,
     CMD_GROUP_PASTE_TRANSCRIPT,
     CMD_GROUP_SET_PLAUD,
     CMD_GROUP_SYNC_GOALS,
     CMD_GROUP_VIEW_GOALS,
     CMD_MY_GOALS_SET,
+)
+from app.bot.routers.membership import (
+    send_group_invite,
+    send_group_members,
+    send_group_requests,
 )
 from app.services.sheet_sync import sync_group_goals_to_sheet
 from app.bot.dialog_context import DialogContext
@@ -49,6 +56,12 @@ logger = logging.getLogger(__name__)
 
 # Одним сообщением — one-shot; длиннее — только через /paste_done.
 _ONE_SHOT_MAX_LEN = 3500
+
+
+_GROUP_MENU_TEXT = "Меню ведущего — выбери раздел:"
+_GROUP_MEMBERS_TEXT = "Участники и заявки:"
+_GROUP_GOALS_TEXT = "Задачи группы:"
+_GROUP_TRANSCRIPT_TEXT = "Транскрипт (Plaud):"
 
 
 def _not_facilitator_text(chat_id: int) -> str:
@@ -236,6 +249,221 @@ class FacilitatorText(BaseFilter):
         return True
 
 
+async def send_group_sync_goals(message: Message, group) -> None:
+    async with get_session() as session:
+        result = await sync_group_goals_to_sheet(session, group)
+    await message.answer(result.message)
+
+
+async def send_group_view_goals(message: Message, group) -> None:
+    async with get_session() as session:
+        week = await get_or_create_current_week(session, group.id)
+        report = await build_group_goals_report(session, group, week)
+    await message.answer(report)
+
+
+async def _show_group_menu(message: Message) -> None:
+    await message.answer(_GROUP_MENU_TEXT, reply_markup=kb.kb_group_menu())
+
+
+@router.message(Command(CMD_GROUP))
+async def cmd_group_menu(message: Message) -> None:
+    group = await _facilitator_group(message.chat.id)
+    if group is None:
+        await message.answer(_not_facilitator_text(message.chat.id))
+        return
+    await _show_group_menu(message)
+
+
+@router.callback_query(F.data == "fc:m:root")
+async def cb_group_menu_root(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        return
+    if await _facilitator_group(callback.message.chat.id) is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    await callback.message.edit_text(_GROUP_MENU_TEXT, reply_markup=kb.kb_group_menu())
+
+
+@router.callback_query(F.data == "fc:m:members")
+async def cb_group_menu_members(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        return
+    if await _facilitator_group(callback.message.chat.id) is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    await callback.message.edit_text(
+        _GROUP_MEMBERS_TEXT, reply_markup=kb.kb_group_members_submenu()
+    )
+
+
+@router.callback_query(F.data == "fc:m:goals")
+async def cb_group_menu_goals(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        return
+    if await _facilitator_group(callback.message.chat.id) is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    await callback.message.edit_text(
+        _GROUP_GOALS_TEXT, reply_markup=kb.kb_group_goals_submenu()
+    )
+
+
+@router.callback_query(F.data == "fc:m:transcript")
+async def cb_group_menu_transcript(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        return
+    if await _facilitator_group(callback.message.chat.id) is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    await callback.message.edit_text(
+        _GROUP_TRANSCRIPT_TEXT, reply_markup=kb.kb_group_transcript_submenu()
+    )
+
+
+@router.callback_query(F.data == "fc:act:invite")
+async def cb_group_act_invite(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        return
+    group = await _facilitator_group(callback.message.chat.id)
+    if group is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    await send_group_invite(callback.message, group)
+
+
+@router.callback_query(F.data == "fc:act:members")
+async def cb_group_act_members(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        return
+    group = await _facilitator_group(callback.message.chat.id)
+    if group is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    await send_group_members(callback.message, group)
+
+
+@router.callback_query(F.data == "fc:act:requests")
+async def cb_group_act_requests(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        return
+    group = await _facilitator_group(callback.message.chat.id)
+    if group is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    await send_group_requests(callback.message, group)
+
+
+@router.callback_query(F.data == "fc:act:goals_view")
+async def cb_group_act_goals_view(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        return
+    group = await _facilitator_group(callback.message.chat.id)
+    if group is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    await send_group_view_goals(callback.message, group)
+
+
+@router.callback_query(F.data == "fc:act:goals_sync")
+async def cb_group_act_goals_sync(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        return
+    group = await _facilitator_group(callback.message.chat.id)
+    if group is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    await send_group_sync_goals(callback.message, group)
+
+
+@router.callback_query(F.data == "fc:act:plaud")
+async def cb_group_act_plaud(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        return
+    if await _facilitator_group(callback.message.chat.id) is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    await callback.message.answer(
+        f"Сохранить ссылку на Plaud:\n/{CMD_GROUP_SET_PLAUD} https://..."
+    )
+
+
+async def _begin_paste_transcript(message: Message, state: FSMContext):
+    group = await _facilitator_group(message.chat.id)
+    if group is None:
+        await message.answer(_not_facilitator_text(message.chat.id))
+        return None
+
+    ctx: DialogContext | None = None
+    member_id: int | None = None
+    async with get_session() as session:
+        member = await get_member_by_chat_id(session, message.chat.id)
+        if member is not None:
+            member_id = member.id
+            dialog = await get_or_create_dialog_state(session, member.id)
+            ctx = DialogContext.from_json(dialog.context_json)
+            ctx.start_facilitator_paste(group.id)
+            await update_dialog_context(session, member.id, ctx.to_json())
+
+    await _save_paste_context(
+        message.chat.id, state, group_id=group.id, pending="", ctx=ctx, member_id=member_id
+    )
+    return group
+
+
+async def _show_paste_prompt(message: Message) -> None:
+    await message.answer(
+        "Жду текст «Плана действий». Можно так:\n\n"
+        "1) Весь план одним сообщением (несколько @-секций) → сразу обработаю.\n"
+        "2) По частям (@Speaker 1, потом @Степан …) → в конце /"
+        f"{CMD_GROUP_PASTE_DONE}.\n"
+        f"3) Одна @-секция без /{CMD_GROUP_PASTE_TRANSCRIPT} — тоже сработает "
+        f"(если не вводишь свои задачи через /{CMD_MY_GOALS_SET})."
+    )
+
+
+@router.callback_query(F.data == "fc:act:paste")
+async def cb_group_act_paste(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        return
+    group = await _begin_paste_transcript(callback.message, state)
+    if group is None:
+        await callback.answer()
+        return
+    await callback.answer()
+    await _show_paste_prompt(callback.message)
+
+
+@router.callback_query(F.data == "fc:act:paste_done")
+async def cb_group_act_paste_done(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        return
+    if await _facilitator_group(callback.message.chat.id) is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    group_id, pending, ctx, member_id = await _load_paste_context(callback.message.chat.id, state)
+    if group_id is None or not pending:
+        await callback.message.answer(
+            f"Нет накопленного текста. Сначала вставь части плана, затем «Завершить вставку» "
+            f"или /{CMD_GROUP_PASTE_DONE}."
+        )
+        return
+    await _finalize_transcript(
+        callback.message, state, group_id=group_id, text=pending, ctx=ctx, member_id=member_id
+    )
+
+
 @router.message(Command(CMD_GROUP_SYNC_GOALS))
 async def cmd_group_sync_goals(message: Message) -> None:
     group = await _facilitator_group(message.chat.id)
@@ -243,10 +471,7 @@ async def cmd_group_sync_goals(message: Message) -> None:
         await message.answer(_not_facilitator_text(message.chat.id))
         return
 
-    async with get_session() as session:
-        result = await sync_group_goals_to_sheet(session, group)
-
-    await message.answer(result.message)
+    await send_group_sync_goals(message, group)
 
 
 @router.message(Command(CMD_GROUP_VIEW_GOALS))
@@ -256,11 +481,7 @@ async def cmd_group_view_goals(message: Message) -> None:
         await message.answer(_not_facilitator_text(message.chat.id))
         return
 
-    async with get_session() as session:
-        week = await get_or_create_current_week(session, group.id)
-        report = await build_group_goals_report(session, group, week)
-
-    await message.answer(report)
+    await send_group_view_goals(message, group)
 
 
 @router.message(Command(CMD_GROUP_SET_PLAUD))
@@ -377,25 +598,9 @@ async def _process_paste_chunk(
 async def cmd_paste_transcript(
     message: Message, state: FSMContext, command: CommandObject
 ) -> None:
-    group = await _facilitator_group(message.chat.id)
+    group = await _begin_paste_transcript(message, state)
     if group is None:
-        await message.answer(_not_facilitator_text(message.chat.id))
         return
-
-    ctx: DialogContext | None = None
-    member_id: int | None = None
-    async with get_session() as session:
-        member = await get_member_by_chat_id(session, message.chat.id)
-        if member is not None:
-            member_id = member.id
-            dialog = await get_or_create_dialog_state(session, member.id)
-            ctx = DialogContext.from_json(dialog.context_json)
-            ctx.start_facilitator_paste(group.id)
-            await update_dialog_context(session, member.id, ctx.to_json())
-
-    await _save_paste_context(
-        message.chat.id, state, group_id=group.id, pending="", ctx=ctx, member_id=member_id
-    )
 
     attached = (command.args or "").strip()
     if attached:
@@ -408,14 +613,7 @@ async def cmd_paste_transcript(
         )
         return
 
-    await message.answer(
-        "Жду текст «Плана действий». Можно так:\n\n"
-        "1) Весь план одним сообщением (несколько @-секций) → сразу обработаю.\n"
-        "2) По частям (@Speaker 1, потом @Степан …) → в конце /"
-        f"{CMD_GROUP_PASTE_DONE}.\n"
-        f"3) Одна @-секция без /{CMD_GROUP_PASTE_TRANSCRIPT} — тоже сработает "
-        f"(если не вводишь свои задачи через /{CMD_MY_GOALS_SET})."
-    )
+    await _show_paste_prompt(message)
 
 
 @router.message(Command(CMD_GROUP_PASTE_DONE))

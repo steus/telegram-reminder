@@ -342,13 +342,7 @@ async def cb_membership_reject(callback: CallbackQuery) -> None:
         logger.exception("Failed to notify rejected applicant %s", applicant_chat_id)
 
 
-@router.message(Command(CMD_GROUP_INVITE))
-async def cmd_group_invite(message: Message) -> None:
-    group = await _facilitator_group(message.chat.id)
-    if group is None:
-        await message.answer(_not_facilitator_text(message.chat.id))
-        return
-
+async def send_group_invite(message: Message, group) -> None:
     me = await message.bot.get_me()
     if not me.username:
         await message.answer("У бота нет username — задай его в @BotFather.")
@@ -362,13 +356,7 @@ async def cmd_group_invite(message: Message) -> None:
     )
 
 
-@router.message(Command(CMD_GROUP_MEMBERS))
-async def cmd_group_members(message: Message) -> None:
-    group = await _facilitator_group(message.chat.id)
-    if group is None:
-        await message.answer(_not_facilitator_text(message.chat.id))
-        return
-
+async def send_group_members(message: Message, group) -> None:
     async with get_session() as session:
         members = await list_members_for_group(session, group.id)
         facilitator_ids = set(await list_group_facilitator_chat_ids(session, group.id))
@@ -381,6 +369,30 @@ async def cmd_group_members(message: Message) -> None:
     await message.answer(text, reply_markup=keyboard)
 
 
+async def send_group_requests(message: Message, group) -> None:
+    await _send_pending_requests(message, group.id)
+
+
+@router.message(Command(CMD_GROUP_INVITE))
+async def cmd_group_invite(message: Message) -> None:
+    group = await _facilitator_group(message.chat.id)
+    if group is None:
+        await message.answer(_not_facilitator_text(message.chat.id))
+        return
+
+    await send_group_invite(message, group)
+
+
+@router.message(Command(CMD_GROUP_MEMBERS))
+async def cmd_group_members(message: Message) -> None:
+    group = await _facilitator_group(message.chat.id)
+    if group is None:
+        await message.answer(_not_facilitator_text(message.chat.id))
+        return
+
+    await send_group_members(message, group)
+
+
 @router.message(Command(CMD_GROUP_REQUESTS))
 async def cmd_group_requests(message: Message) -> None:
     group = await _facilitator_group(message.chat.id)
@@ -388,7 +400,7 @@ async def cmd_group_requests(message: Message) -> None:
         await message.answer(_not_facilitator_text(message.chat.id))
         return
 
-    await _send_pending_requests(message, group.id)
+    await send_group_requests(message, group)
 
 
 @router.callback_query(F.data.startswith("mj:fac:"))
