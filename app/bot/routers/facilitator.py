@@ -38,7 +38,11 @@ from app.services.auto_goal_setup import (
     run_auto_extraction_for_group,
     should_confirm_resend,
 )
-from app.services.plaud_action_plan import count_action_plan_sections, has_action_plan_markers
+from app.services.plaud_action_plan import (
+    count_action_plan_sections,
+    has_action_plan_markers,
+    merge_action_plan_transcripts,
+)
 
 router = Router(name="facilitator")
 logger = logging.getLogger(__name__)
@@ -157,11 +161,17 @@ async def _finalize_transcript(
         async with get_session() as session:
             week = await get_or_create_current_week(session, group_id)
             had_transcript = bool(week.transcript_text and week.transcript_text.strip())
-            await update_week_transcript(session, week.id, text)
+            merged = merge_action_plan_transcripts(week.transcript_text, text)
+            await update_week_transcript(session, week.id, merged)
+            week.transcript_text = merged
             week_id = week.id
 
             if await should_confirm_resend(
-                session, group_id, week_id, had_transcript=had_transcript
+                session,
+                group_id,
+                week_id,
+                had_transcript=had_transcript,
+                pasted_text=text,
             ):
                 await state.set_state(FacilitatorStates.confirm_resend)
                 await state.update_data(facilitator_group_id=group_id, resend_week_id=week_id)
@@ -177,7 +187,7 @@ async def _finalize_transcript(
                 return
 
             result = await run_auto_extraction_for_group(
-                session, message.bot, group_id
+                session, message.bot, group_id, pasted_text=text
             )
     except Exception as exc:
         logger.exception("Failed to finalize transcript paste")

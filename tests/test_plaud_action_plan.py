@@ -1,6 +1,11 @@
 """Разбор Plaud «План действий»."""
 
-from app.services.plaud_action_plan import count_action_plan_sections, extract_tasks_from_action_plan
+from app.services.plaud_action_plan import (
+    count_action_plan_sections,
+    extract_tasks_from_action_plan,
+    member_has_action_plan_section,
+    merge_action_plan_transcripts,
+)
 
 SAMPLE = """
 План действий
@@ -88,3 +93,29 @@ def test_count_sections() -> None:
     assert count_action_plan_sections(SAMPLE) == 4
     assert count_action_plan_sections("@Speaker 1\n- one\n\n@Степан\n- two") == 2
     assert count_action_plan_sections("@Степан\n- only me") == 1
+
+
+def test_deniss_header_matches_denis_member() -> None:
+    text = "@Deniss\nИзучить Твиттер - [TBD]\n"
+    assert member_has_action_plan_section(text, "Denis")
+    tasks = extract_tasks_from_action_plan(text, "Denis")
+    assert tasks is not None
+    assert len(tasks) == 1
+
+
+def test_merge_action_plan_adds_second_participant() -> None:
+    stepan = "@Stepan\nTask for Stepan - [TBD]"
+    denis = "@Deniss\nTask for Denis - [TBD]"
+    merged = merge_action_plan_transcripts(stepan, denis)
+    assert member_has_action_plan_section(merged, "Stepan")
+    assert member_has_action_plan_section(merged, "Denis")
+    assert extract_tasks_from_action_plan(merged, "Stepan") == ["Task for Stepan"]
+    assert extract_tasks_from_action_plan(merged, "Denis") == ["Task for Denis"]
+
+
+def test_merge_action_plan_updates_existing_section() -> None:
+    existing = "@Deniss\nOld task - [TBD]"
+    updated = "@Deniss\nNew task - [TBD]\nAnother task - [TBD]"
+    merged = merge_action_plan_transcripts(existing, updated)
+    tasks = extract_tasks_from_action_plan(merged, "Denis")
+    assert tasks == ["New task", "Another task"]

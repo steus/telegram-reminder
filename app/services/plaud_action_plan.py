@@ -126,6 +126,64 @@ def count_action_plan_sections(transcript: str) -> int:
     return len(_parse_sections(plan_body))
 
 
+def _headers_refer_to_same_person(header_a: str, header_b: str) -> bool:
+    """Считаем @Deniss и @Denis одной секцией (частичное совпадение токенов)."""
+    a = header_a.strip().lower()
+    b = header_b.strip().lower()
+    if a == b:
+        return True
+    for token in re.findall(r"\w+", a):
+        if len(token) >= 3 and token in b:
+            return True
+    for token in re.findall(r"\w+", b):
+        if len(token) >= 3 and token in a:
+            return True
+    return False
+
+
+def _format_action_plan_section(header: str, tasks: list[str]) -> str:
+    lines = [f"@{header}", ""]
+    lines.extend(tasks)
+    return "\n".join(lines)
+
+
+def merge_action_plan_transcripts(existing: str | None, new_text: str) -> str:
+    """Добавить или обновить @-секции в сохранённом транскрипте недели."""
+    new_body = _find_plan_body(new_text) or new_text.strip()
+    new_sections = _parse_sections(new_body)
+    if not new_sections:
+        return (existing or "").strip() or new_text.strip()
+
+    if not existing or not existing.strip():
+        return new_text.strip()
+
+    existing_body = _find_plan_body(existing) or existing.strip()
+    merged: list[tuple[str, list[str]]] = list(_parse_sections(existing_body))
+
+    for new_header, new_tasks in new_sections:
+        replaced = False
+        for index, (old_header, _) in enumerate(merged):
+            if _headers_refer_to_same_person(old_header, new_header):
+                merged[index] = (new_header, new_tasks)
+                replaced = True
+                break
+        if not replaced:
+            merged.append((new_header, new_tasks))
+
+    return "\n\n".join(_format_action_plan_section(h, t) for h, t in merged).strip()
+
+
+def member_has_action_plan_section(transcript: str, full_name: str) -> bool:
+    """Есть ли в транскрипте @-секция для участника."""
+    plan_body = _find_plan_body(transcript)
+    if plan_body is None:
+        return False
+    for header, _ in _parse_sections(plan_body):
+        if _header_matches_member(header, full_name):
+            return True
+    return False
+
+
 def extract_tasks_from_action_plan(
     transcript: str, full_name: str
 ) -> list[str] | None:

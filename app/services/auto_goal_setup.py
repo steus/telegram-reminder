@@ -28,6 +28,10 @@ from app.services.extraction import (
     start_auto_goal_confirmation,
 )
 from app.services.plaud import PlaudManualRequired, fetch_transcript
+from app.services.plaud_action_plan import (
+    count_action_plan_sections,
+    member_has_action_plan_section,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,9 +100,12 @@ async def should_confirm_resend(
     week_id: int,
     *,
     had_transcript: bool,
+    pasted_text: str,
 ) -> bool:
-    """Спросить ведущего перед повторной рассылкой после правки транскрипта."""
+    """Спросить ведущего перед повторной рассылкой полного плана."""
     if not had_transcript:
+        return False
+    if count_action_plan_sections(pasted_text) < 2:
         return False
     return await has_pending_auto_confirmations(session, group_id, week_id)
 
@@ -182,15 +189,34 @@ async def run_auto_extraction_for_group(
     group_id: int,
     *,
     force: bool = False,
+    pasted_text: str | None = None,
 ) -> AutoExtractionResult:
     """Извлечь goals для всех auto-участников и разослать экран подтверждения."""
     week = await get_or_create_current_week(session, group_id)
     members = await list_auto_members_for_group(session, group_id)
     result = AutoExtractionResult(no_auto_members=not members)
 
+    transcript = (week.transcript_text or "").strip()
+
     for member in members:
+        if (
+            not force
+            and pasted_text is not None
+            and not member_has_action_plan_section(pasted_text, member.full_name)
+        ):
+            continue
+
+        dialog = await get_or_create_dialog_state(session, member.id)
+        in_plan = bool(transcript) and member_has_action_plan_section(
+            transcript, member.full_name
+        )
+        member_force = force or (
+            in_plan
+            and dialog.state == DialogStateEnum.confirming_tasks
+            and dialog.active_week_id == week.id
+        )
         ok, reason = await trigger_auto_goal_setup(
-            session, member, week, force=force
+            session, member, week, force=member_force
         )
         if not ok:
             if reason == "not_onboarded":
