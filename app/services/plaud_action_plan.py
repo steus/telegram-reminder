@@ -12,6 +12,8 @@ _NAME_ALIASES: dict[str, list[str]] = {
     "майя": ["maya", "майя", "maia"],
     "denis": ["denis", "денис"],
     "денис": ["denis", "денис"],
+    "marina": ["marina", "марина"],
+    "марина": ["marina", "марина"],
 }
 
 _PLAN_TITLE_RE = re.compile(r"план\s+действий", re.IGNORECASE)

@@ -15,6 +15,7 @@ from app.db.repo import (
     get_member_by_id,
     get_or_create_current_week,
     get_or_create_dialog_state,
+    list_active_members_for_group,
     list_auto_members_for_group,
     list_group_member_names,
     list_tasks_for_member_week,
@@ -44,6 +45,7 @@ NO_GOALS_MESSAGE = (
 REASON_NO_GOALS = "задачи в транскрипте не найдены"
 REASON_NOT_ONBOARDED = "не завершил онбординг"
 REASON_ALREADY_CONFIRMING = "уже на экране подтверждения (не обновлено — выбери «Разослать участникам» при повторной вставке)"
+REASON_NO_MEMBER_MATCH = "нет участника с таким именем в группе"
 
 
 @dataclass
@@ -74,15 +76,15 @@ def format_facilitator_report(result: AutoExtractionResult, *, saved_only: bool 
         for name, reason in result.without_goals:
             lines.append(f"  • {name} — {reason}")
     elif not result.no_auto_members and not result.sent_with_goals:
-        lines.append("Никому не отправлено — проверь режим auto и онбординг участников.")
+        lines.append("Никому не отправлено — проверь онбординг участников.")
     return "\n".join(lines)
 
 
-async def has_pending_auto_confirmations(
+async def has_pending_goal_confirmations(
     session: AsyncSession, group_id: int, week_id: int
 ) -> bool:
-    """Есть ли auto-участники на экране подтверждения goals этой недели."""
-    for member in await list_auto_members_for_group(session, group_id):
+    """Есть ли участники на экране подтверждения goals этой недели."""
+    for member in await list_active_members_for_group(session, group_id):
         dialog = await get_or_create_dialog_state(session, member.id)
         if dialog.active_week_id != week_id:
             continue
@@ -107,7 +109,7 @@ async def should_confirm_resend(
         return False
     if count_action_plan_sections(pasted_text) < 2:
         return False
-    return await has_pending_auto_confirmations(session, group_id, week_id)
+    return await has_pending_goal_confirmations(session, group_id, week_id)
 
 
 async def trigger_auto_goal_setup(
@@ -116,9 +118,10 @@ async def trigger_auto_goal_setup(
     week: Week,
     *,
     force: bool = False,
+    require_auto: bool = True,
 ) -> tuple[bool, str | None]:
     """Извлечь goals из транскрипта. (True, reason) — обработан; (False, reason) — пропуск."""
-    if member.input_mode != InputMode.auto:
+    if require_auto and member.input_mode != InputMode.auto:
         return False, "not_auto"
 
     dialog = await get_or_create_dialog_state(session, member.id)
@@ -191,21 +194,31 @@ async def run_auto_extraction_for_group(
     force: bool = False,
     pasted_text: str | None = None,
 ) -> AutoExtractionResult:
-    """Извлечь goals для всех auto-участников и разослать экран подтверждения."""
+    """Извлечь goals из транскрипта и разослать экран подтверждения."""
     week = await get_or_create_current_week(session, group_id)
-    members = await list_auto_members_for_group(session, group_id)
-    result = AutoExtractionResult(no_auto_members=not members)
+    from_facilitator_paste = pasted_text is not None
+    if from_facilitator_paste:
+        members = [
+            member
+            for member in await list_active_members_for_group(session, group_id)
+            if member_has_action_plan_section(pasted_text, member.full_name)
+        ]
+        require_auto = False
+    else:
+        members = await list_auto_members_for_group(session, group_id)
+        require_auto = True
+
+    result = AutoExtractionResult(
+        no_auto_members=not members and not from_facilitator_paste
+    )
+
+    if from_facilitator_paste and not members:
+        result.without_goals.append(("@-секция из вставки", REASON_NO_MEMBER_MATCH))
+        return result
 
     transcript = (week.transcript_text or "").strip()
 
     for member in members:
-        if (
-            not force
-            and pasted_text is not None
-            and not member_has_action_plan_section(pasted_text, member.full_name)
-        ):
-            continue
-
         dialog = await get_or_create_dialog_state(session, member.id)
         in_plan = bool(transcript) and member_has_action_plan_section(
             transcript, member.full_name
@@ -216,7 +229,11 @@ async def run_auto_extraction_for_group(
             and dialog.active_week_id == week.id
         )
         ok, reason = await trigger_auto_goal_setup(
-            session, member, week, force=member_force
+            session,
+            member,
+            week,
+            force=member_force,
+            require_auto=require_auto,
         )
         if not ok:
             if reason == "not_onboarded":

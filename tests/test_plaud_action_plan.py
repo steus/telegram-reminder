@@ -95,6 +95,13 @@ def test_count_sections() -> None:
     assert count_action_plan_sections("@Степан\n- only me") == 1
 
 
+def test_marina_header_matches_marina_member() -> None:
+    text = "@Marina\nПровести мероприятие - [TBD]\n"
+    assert member_has_action_plan_section(text, "Marina")
+    tasks = extract_tasks_from_action_plan(text, "Marina")
+    assert tasks == ["Провести мероприятие"]
+
+
 def test_deniss_header_matches_denis_member() -> None:
     text = "@Deniss\nИзучить Твиттер - [TBD]\n"
     assert member_has_action_plan_section(text, "Denis")
