@@ -208,11 +208,15 @@ class FacilitatorText(BaseFilter):
         group = await _facilitator_group(message.chat.id)
         if group is None:
             return False
+        text = message.text
         # Ведущий часто совпадает с участником: не перехватывать чек-ин, цели, декомпозицию.
         async with get_session() as session:
             member = await get_member_by_chat_id(session, message.chat.id)
             if member is not None:
                 dialog = await get_or_create_dialog_state(session, member.id)
+                ctx = DialogContext.from_json(dialog.context_json)
+                if ctx.is_facilitator_pasting() or has_action_plan_markers(text):
+                    return True
                 if dialog.state in (
                     DialogStateEnum.confirming_tasks,
                     DialogStateEnum.checkin,
@@ -269,62 +273,15 @@ async def cmd_set_plaud_url(message: Message, command: CommandObject) -> None:
     await message.answer(f"Ссылка на транскрипт сохранена для недели с {week_label}.")
 
 
-@router.message(Command(CMD_GROUP_PASTE_TRANSCRIPT))
-async def cmd_paste_transcript(message: Message, state: FSMContext) -> None:
-    group = await _facilitator_group(message.chat.id)
-    if group is None:
-        await message.answer(_not_facilitator_text(message.chat.id))
-        return
-
-    ctx: DialogContext | None = None
-    member_id: int | None = None
-    async with get_session() as session:
-        member = await get_member_by_chat_id(session, message.chat.id)
-        if member is not None:
-            member_id = member.id
-            dialog = await get_or_create_dialog_state(session, member.id)
-            ctx = DialogContext.from_json(dialog.context_json)
-            ctx.start_facilitator_paste(group.id)
-            await update_dialog_context(session, member.id, ctx.to_json())
-
-    await _save_paste_context(
-        message.chat.id, state, group_id=group.id, pending="", ctx=ctx, member_id=member_id
-    )
-    await message.answer(
-        "Жду текст «Плана действий». Можно так:\n\n"
-        "1) Весь план одним сообщением (несколько @-секций) → сразу обработаю.\n"
-        "2) По частям (@Speaker 1, потом @Степан …) → в конце /"
-        f"{CMD_GROUP_PASTE_DONE}.\n"
-        f"3) Одна @-секция без /{CMD_GROUP_PASTE_TRANSCRIPT} — тоже сработает "
-        f"(если не вводишь свои задачи через /{CMD_MY_GOALS_SET})."
-    )
-
-
-@router.message(Command(CMD_GROUP_PASTE_DONE))
-async def cmd_paste_done(message: Message, state: FSMContext) -> None:
-    group_id, pending, ctx, member_id = await _load_paste_context(message.chat.id, state)
-    if group_id is None or not pending:
-        await message.answer(
-            f"Нет накопленного текста. Сначала /{CMD_GROUP_PASTE_TRANSCRIPT} "
-            f"и пришли части плана, затем /{CMD_GROUP_PASTE_DONE}."
-        )
-        return
-    await _finalize_transcript(
-        message, state, group_id=group_id, text=pending, ctx=ctx, member_id=member_id
-    )
-
-
-@router.message(FacilitatorText())
-async def handle_facilitator_transcript_text(message: Message, state: FSMContext) -> None:
-    current = await state.get_state()
-    if current and current.startswith("SettingsStates:"):
-        return
-
-    group = await _facilitator_group(message.chat.id)
-    if group is None:
-        return
-
-    chunk = (message.text or "").strip()
+async def _process_paste_chunk(
+    message: Message,
+    state: FSMContext,
+    *,
+    group,
+    chunk: str,
+    finalize_single_section: bool = False,
+) -> None:
+    chunk = chunk.strip()
     if len(chunk) < 10:
         await message.answer("Слишком короткий фрагмент.")
         return
@@ -332,7 +289,6 @@ async def handle_facilitator_transcript_text(message: Message, state: FSMContext
     group_id, pending, ctx, member_id = await _load_paste_context(message.chat.id, state)
     in_paste_mode = group_id is not None
 
-    # One-shot: одна секция @… без предварительной команды
     if not in_paste_mode and has_action_plan_markers(chunk) and len(chunk) <= _ONE_SHOT_MAX_LEN:
         await _finalize_transcript(
             message,
@@ -378,8 +334,19 @@ async def handle_facilitator_transcript_text(message: Message, state: FSMContext
         member_id=member_id,
     )
 
-    # После group_paste_transcript: одна @-секция — ждём остальные; несколько — полный план
-    if not pending and count_action_plan_sections(combined) >= 2:
+    section_count = count_action_plan_sections(combined)
+    if finalize_single_section and section_count == 1:
+        await _finalize_transcript(
+            message,
+            state,
+            group_id=group_id or group.id,
+            text=combined,
+            ctx=ctx,
+            member_id=member_id,
+        )
+        return
+
+    if not pending and section_count >= 2:
         await _finalize_transcript(
             message,
             state,
@@ -393,6 +360,85 @@ async def handle_facilitator_transcript_text(message: Message, state: FSMContext
     await message.answer(
         f"Принял ({len(combined)} символов). "
         f"Пришли следующие @-секции, затем /{CMD_GROUP_PASTE_DONE}."
+    )
+
+
+@router.message(Command(CMD_GROUP_PASTE_TRANSCRIPT))
+async def cmd_paste_transcript(
+    message: Message, state: FSMContext, command: CommandObject
+) -> None:
+    group = await _facilitator_group(message.chat.id)
+    if group is None:
+        await message.answer(_not_facilitator_text(message.chat.id))
+        return
+
+    ctx: DialogContext | None = None
+    member_id: int | None = None
+    async with get_session() as session:
+        member = await get_member_by_chat_id(session, message.chat.id)
+        if member is not None:
+            member_id = member.id
+            dialog = await get_or_create_dialog_state(session, member.id)
+            ctx = DialogContext.from_json(dialog.context_json)
+            ctx.start_facilitator_paste(group.id)
+            await update_dialog_context(session, member.id, ctx.to_json())
+
+    await _save_paste_context(
+        message.chat.id, state, group_id=group.id, pending="", ctx=ctx, member_id=member_id
+    )
+
+    attached = (command.args or "").strip()
+    if attached:
+        await _process_paste_chunk(
+            message,
+            state,
+            group=group,
+            chunk=attached,
+            finalize_single_section=True,
+        )
+        return
+
+    await message.answer(
+        "Жду текст «Плана действий». Можно так:\n\n"
+        "1) Весь план одним сообщением (несколько @-секций) → сразу обработаю.\n"
+        "2) По частям (@Speaker 1, потом @Степан …) → в конце /"
+        f"{CMD_GROUP_PASTE_DONE}.\n"
+        f"3) Одна @-секция без /{CMD_GROUP_PASTE_TRANSCRIPT} — тоже сработает "
+        f"(если не вводишь свои задачи через /{CMD_MY_GOALS_SET})."
+    )
+
+
+@router.message(Command(CMD_GROUP_PASTE_DONE))
+async def cmd_paste_done(message: Message, state: FSMContext) -> None:
+    group_id, pending, ctx, member_id = await _load_paste_context(message.chat.id, state)
+    if group_id is None or not pending:
+        await message.answer(
+            f"Нет накопленного текста. Сначала /{CMD_GROUP_PASTE_TRANSCRIPT} "
+            f"и пришли части плана, затем /{CMD_GROUP_PASTE_DONE}.\n\n"
+            f"Либо одним сообщением: /{CMD_GROUP_PASTE_TRANSCRIPT} и сразу текст с @-заголовком, "
+            f"или просто блок @Имя без команды."
+        )
+        return
+    await _finalize_transcript(
+        message, state, group_id=group_id, text=pending, ctx=ctx, member_id=member_id
+    )
+
+
+@router.message(FacilitatorText())
+async def handle_facilitator_transcript_text(message: Message, state: FSMContext) -> None:
+    current = await state.get_state()
+    if current and current.startswith("SettingsStates:"):
+        return
+
+    group = await _facilitator_group(message.chat.id)
+    if group is None:
+        return
+
+    await _process_paste_chunk(
+        message,
+        state,
+        group=group,
+        chunk=message.text or "",
     )
 
 
