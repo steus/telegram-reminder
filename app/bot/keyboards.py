@@ -320,6 +320,18 @@ def kb_member_delete_confirm(member_id: int) -> InlineKeyboardMarkup:
     )
 
 
+def kb_goals_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Задать задачи", callback_data="gl:act:set")],
+            [InlineKeyboardButton(text="Задачи и статусы", callback_data="gl:act:view")],
+            [InlineKeyboardButton(text="Обновить статус", callback_data="gl:act:update")],
+            [InlineKeyboardButton(text="Прогресс по неделям", callback_data="gl:act:stats")],
+            [InlineKeyboardButton(text="Обновить в таблице", callback_data="gl:act:submit")],
+        ]
+    )
+
+
 def kb_group_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[

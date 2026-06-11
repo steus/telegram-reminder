@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from app.bot.command_names import (
+    CMD_GOALS,
     CMD_GROUP,
     CMD_GROUP_PASTE_DONE,
     CMD_GROUP_PASTE_TRANSCRIPT,
@@ -30,11 +31,11 @@ async def build_help_text(chat_id: int) -> str:
         "/help — эта справка",
         "",
         "Задачи на неделю:",
-        f"/{CMD_MY_GOALS_SET} — задать задачи (режим private)",
-        f"/{CMD_MY_GOALS_VIEW} — задачи и статусы на эту неделю",
-        f"/{CMD_MY_GOALS_UPDATE} — обновить статус моих задач",
-        f"/{CMD_MY_GOALS_STATS} — прогресс по неделям (серия, % выполнения)",
-        f"/{CMD_MY_GOALS_SUBMIT} — обновить задачи в таблице (вкладка «Прогресс»)",
+        f"/{CMD_GOALS} — меню: задать, посмотреть, статус, прогресс, таблица",
+        "",
+        "Те же действия отдельными командами:",
+        f"/{CMD_MY_GOALS_SET}, /{CMD_MY_GOALS_VIEW}, /{CMD_MY_GOALS_UPDATE}, "
+        f"/{CMD_MY_GOALS_STATS}, /{CMD_MY_GOALS_SUBMIT}",
     ]
 
     async with get_session() as session:

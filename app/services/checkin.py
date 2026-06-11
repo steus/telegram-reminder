@@ -10,7 +10,7 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.bot.command_names import CMD_MY_GOALS_SET
+from app.bot.command_names import CMD_GOALS
 from app.bot.keyboards import kb_checkin_message, kb_decompose_offer
 from app.bot.task_confirmation import format_task_list
 from app.db.models import DialogStateEnum, Member, Task, TaskStatus
@@ -33,7 +33,7 @@ CHECKIN_INTRO = (
 
 CHECKIN_EMPTY = (
     "На эту неделю задач пока нет — когда появятся, я напомню перед встречей. "
-    f"Добавить свои — /{CMD_MY_GOALS_SET}."
+    f"Добавить свои — /{CMD_GOALS}."
 )
 
 CHECKIN_STATUSES = frozenset(

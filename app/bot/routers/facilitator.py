@@ -17,7 +17,7 @@ from app.bot.command_names import (
     CMD_GROUP_SET_PLAUD,
     CMD_GROUP_SYNC_GOALS,
     CMD_GROUP_VIEW_GOALS,
-    CMD_MY_GOALS_SET,
+    CMD_GOALS,
 )
 from app.bot.routers.membership import (
     send_group_invite,
@@ -428,7 +428,7 @@ async def _show_paste_prompt(message: Message) -> None:
         "2) По частям (@Speaker 1, потом @Степан …) → в конце /"
         f"{CMD_GROUP_PASTE_DONE}.\n"
         f"3) Одна @-секция без /{CMD_GROUP_PASTE_TRANSCRIPT} — тоже сработает "
-        f"(если не вводишь свои задачи через /{CMD_MY_GOALS_SET})."
+        f"(если не вводишь свои задачи через /{CMD_GOALS})."
     )
 
 
@@ -535,7 +535,7 @@ async def _process_paste_chunk(
         await message.answer(
             f"Это похоже на транскрипт встречи. Для группы — /{CMD_GROUP_PASTE_TRANSCRIPT} "
             "или один блок с несколькими @-заголовками.\n\n"
-            f"Для своих задач — /{CMD_MY_GOALS_SET} и список строк (без @)."
+            f"Для своих задач — /{CMD_GOALS} и список строк (без @)."
         )
         return
 

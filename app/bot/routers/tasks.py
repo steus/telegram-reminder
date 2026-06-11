@@ -9,8 +9,10 @@ from aiogram.filters import BaseFilter, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from app.bot import keyboards as kb
 from app.bot.dialog_context import DialogContext
 from app.bot.command_names import (
+    CMD_GOALS,
     CMD_MY_GOALS_SET,
     CMD_MY_GOALS_STATS,
     CMD_MY_GOALS_SUBMIT,
@@ -62,6 +64,8 @@ logger = logging.getLogger(__name__)
 
 router = Router(name="goals")
 
+_GOALS_MENU_TEXT = "Задачи на неделю — что сделать?"
+
 
 class InTaskInput(BaseFilter):
     """Сообщение в режиме ввода/правки goals (collect или correct)."""
@@ -91,8 +95,11 @@ async def _show_confirmation(message: Message, member_id: int, week_id: int) -> 
     )
 
 
-@router.message(Command(CMD_MY_GOALS_SET))
-async def cmd_my_goals_set(message: Message, state: FSMContext) -> None:
+async def _show_goals_menu(message: Message) -> None:
+    await message.answer(_GOALS_MENU_TEXT, reply_markup=kb.kb_goals_menu())
+
+
+async def send_my_goals_set(message: Message, state: FSMContext) -> None:
     async with get_session() as session:
         member = await get_member_by_chat_id(session, message.chat.id)
         if member is None:
@@ -118,8 +125,7 @@ async def cmd_my_goals_set(message: Message, state: FSMContext) -> None:
     await message.answer(GOAL_COLLECTION_PROMPT)
 
 
-@router.message(Command(CMD_MY_GOALS_VIEW))
-async def cmd_my_goals_view(message: Message) -> None:
+async def send_my_goals_view(message: Message) -> None:
     async with get_session() as session:
         member = await get_member_by_chat_id(session, message.chat.id)
         if member is None:
@@ -137,7 +143,7 @@ async def cmd_my_goals_view(message: Message) -> None:
     if not tasks:
         await message.answer(
             "Задач на эту неделю пока нет. "
-            f"Чтобы добавить — /{CMD_MY_GOALS_SET}."
+            f"Чтобы добавить — /{CMD_GOALS} или /{CMD_MY_GOALS_SET}."
         )
         return
 
@@ -147,8 +153,7 @@ async def cmd_my_goals_view(message: Message) -> None:
     )
 
 
-@router.message(Command(CMD_MY_GOALS_SUBMIT))
-async def cmd_my_goals_submit(message: Message) -> None:
+async def send_my_goals_submit(message: Message) -> None:
     async with get_session() as session:
         member = await get_member_by_chat_id(session, message.chat.id)
         if member is None:
@@ -159,8 +164,7 @@ async def cmd_my_goals_submit(message: Message) -> None:
     await message.answer(result.message)
 
 
-@router.message(Command(CMD_MY_GOALS_UPDATE))
-async def cmd_my_goals_update(message: Message) -> None:
+async def send_my_goals_update(message: Message) -> None:
     async with get_session() as session:
         member = await get_member_by_chat_id(session, message.chat.id)
         if member is None:
@@ -172,8 +176,7 @@ async def cmd_my_goals_update(message: Message) -> None:
         await message.answer("Не удалось отправить чек-ин — напиши ведущему.")
 
 
-@router.message(Command(CMD_MY_GOALS_STATS))
-async def cmd_my_goals_stats(message: Message) -> None:
+async def send_my_goals_stats(message: Message) -> None:
     async with get_session() as session:
         member = await get_member_by_chat_id(session, message.chat.id)
         if member is None:
@@ -189,6 +192,87 @@ async def cmd_my_goals_stats(message: Message) -> None:
 
     progress = compute_member_progress(tasks, current_week=current_week)
     await message.answer(format_stats_message(progress))
+
+
+@router.message(Command(CMD_GOALS))
+async def cmd_goals_menu(message: Message) -> None:
+    async with get_session() as session:
+        member = await get_member_by_chat_id(session, message.chat.id)
+        if member is None:
+            await message.answer(UNKNOWN_USER_TEXT)
+            return
+        dialog = await get_or_create_dialog_state(session, member.id)
+        ctx = DialogContext.from_json(dialog.context_json)
+        if not ctx.onboarded:
+            await message.answer("Сначала давай закончим знакомство — нажми /start.")
+            return
+
+    await _show_goals_menu(message)
+
+
+@router.callback_query(F.data == "gl:act:set")
+async def cb_goals_set(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        return
+    await callback.answer()
+    await send_my_goals_set(callback.message, state)
+
+
+@router.callback_query(F.data == "gl:act:view")
+async def cb_goals_view(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        return
+    await callback.answer()
+    await send_my_goals_view(callback.message)
+
+
+@router.callback_query(F.data == "gl:act:update")
+async def cb_goals_update(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        return
+    await callback.answer()
+    await send_my_goals_update(callback.message)
+
+
+@router.callback_query(F.data == "gl:act:stats")
+async def cb_goals_stats(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        return
+    await callback.answer()
+    await send_my_goals_stats(callback.message)
+
+
+@router.callback_query(F.data == "gl:act:submit")
+async def cb_goals_submit(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        return
+    await callback.answer()
+    await send_my_goals_submit(callback.message)
+
+
+@router.message(Command(CMD_MY_GOALS_SET))
+async def cmd_my_goals_set(message: Message, state: FSMContext) -> None:
+    await send_my_goals_set(message, state)
+
+
+@router.message(Command(CMD_MY_GOALS_VIEW))
+async def cmd_my_goals_view(message: Message) -> None:
+    await send_my_goals_view(message)
+
+
+@router.message(Command(CMD_MY_GOALS_SUBMIT))
+async def cmd_my_goals_submit(message: Message) -> None:
+    await send_my_goals_submit(message)
+
+
+@router.message(Command(CMD_MY_GOALS_UPDATE))
+async def cmd_my_goals_update(message: Message) -> None:
+    await send_my_goals_update(message)
+
+
+@router.message(Command(CMD_MY_GOALS_STATS))
+async def cmd_my_goals_stats(message: Message) -> None:
+    await send_my_goals_stats(message)
 
 
 @router.message(InTaskInput())
