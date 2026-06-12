@@ -55,7 +55,6 @@ from app.services.voice import (
     VOICE_TRANSCRIBE_FAILED,
     detect_audio_source,
     duration_ok,
-    is_whisper_hallucination,
     message_has_audio,
     transcribe_message_audio,
 )
@@ -296,10 +295,6 @@ async def handle_goal_text(message: Message, state: FSMContext) -> None:
         if not user_text:
             await message.answer(VOICE_TRANSCRIBE_FAILED)
             return
-
-    if user_text and is_whisper_hallucination(user_text):
-        await message.answer(VOICE_NOTHING_HEARD)
-        return
 
     async with get_session() as session:
         member = await get_member_by_chat_id(session, message.chat.id)
