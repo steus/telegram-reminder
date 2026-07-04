@@ -25,6 +25,7 @@ Python 3.12+, `aiogram` 3.x (async, long polling), `SQLAlchemy` 2.x async + `aio
 | Разбивка ТЗ по этапам, что читать под задачу | `plan/README.md` + `plan/stage-N-*.md` |
 | Пользовательская инструкция, команды, troubleshooting | `README.md` |
 | Деплой на VPS, скрипты, бэкапы | `docs/DEPLOY.md`, `scripts/` |
+| **Новый инстанс без Docker** (venv, systemd, Google Sheets) | `docs/SETUP_INSTANCE.md` |
 
 > `plan/PROGRESS.md` → раздел «Заметки между этапами» — самая быстрая карта того,
 > в каком модуле реализована каждая фича (миграции, callback-форматы, сервисы).
