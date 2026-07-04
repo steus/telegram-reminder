@@ -115,6 +115,10 @@ Cron (ежедневно 03:00):
 0 3 * * * cd /opt/bot-tracker && ./scripts/backup_db.sh >> /var/log/bot-tracker-backup.log 2>&1
 ```
 
-## Без Docker
+## Без Docker / новый инстанс
 
-См. [`deploy/bot-tracker.service`](../deploy/bot-tracker.service).
+Полная инструкция (venv, systemd, Google Sheets, несколько ботов на VPS):
+[`SETUP_INSTANCE.md`](SETUP_INSTANCE.md).
+
+Кратко: `bash scripts/setup_direct.sh`, systemd-юнит из
+[`deploy/bot-tracker.service`](../deploy/bot-tracker.service).
