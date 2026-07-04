@@ -61,6 +61,7 @@
 | 5 | `stage-5-decompose-voice.md` | Опт-ин декомпозиция (промпт 2), голос через whisper.cpp |
 | 6 | `stage-6-summary-sheets.md` | `[REPORT_READY]`, «сначала участнику», видимость, Google Sheets |
 | 7 | `stage-7-stats-deploy.md` | `/stats`, midweek ping, прод-деплой (Docker/systemd), бэкапы |
+| 8 | `stage-8-profile.md` | Профиль участника (анкета JTBD), подмешивание в ответы; далее — каскад целей, эксперименты, анти-галлюцинации |
 
 ## Дополнительные документы
 
