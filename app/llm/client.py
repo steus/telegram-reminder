@@ -94,7 +94,12 @@ async def ask_llm(
             "LLM primary provider failed (%s), switching to fallback",
             primary_error,
         )
-        return await asyncio.wait_for(
-            _call_provider(fallback, messages, json_mode=json_mode),
-            timeout=timeout,
-        )
+        try:
+            return await asyncio.wait_for(
+                _call_provider(fallback, messages, json_mode=json_mode),
+                timeout=timeout,
+            )
+        except Exception as fallback_error:
+            raise RuntimeError(
+                f"LLM primary and fallback failed: {primary_error}; {fallback_error}"
+            ) from fallback_error

@@ -24,6 +24,16 @@ from app.services.profile_onboarding import (
     process_survey_message,
     start_survey,
 )
+from app.services.voice import (
+    EmptyTranscriptionError,
+    VOICE_NOTHING_HEARD,
+    VOICE_TOO_LONG,
+    VOICE_TRANSCRIBE_FAILED,
+    detect_audio_source,
+    duration_ok,
+    message_has_audio,
+    transcribe_message_audio,
+)
 
 router = Router(name="profile")
 
@@ -32,7 +42,7 @@ class InOnboardingSurvey(BaseFilter):
     async def __call__(self, message: Message) -> bool:
         if message.text and message.text.startswith("/"):
             return False
-        if not message.text:
+        if not message.text and not message_has_audio(message):
             return False
         async with get_session() as session:
             member = await get_member_by_chat_id(session, message.chat.id)
@@ -80,7 +90,7 @@ async def cmd_my_profile_fill(message: Message) -> None:
         resume = profile.status == OnboardingStatus.in_progress
         try:
             reply = await start_survey(session, member, resume=resume)
-        except RuntimeError:
+        except Exception:
             await message.answer(
                 "Сейчас не могу запустить анкету — проверь настройки LLM и попробуй позже."
             )
@@ -106,7 +116,7 @@ async def cb_profile_start(callback: CallbackQuery) -> None:
             resume = False
         try:
             reply = await start_survey(session, member, resume=resume)
-        except RuntimeError:
+        except Exception:
             await callback.answer("LLM недоступен.", show_alert=True)
             return
 
@@ -139,7 +149,7 @@ async def cb_profile_refill_yes(callback: CallbackQuery) -> None:
         await reset_profile_for_refill(session, member.id)
         try:
             reply = await start_survey(session, member, resume=False)
-        except RuntimeError:
+        except Exception:
             await callback.answer("LLM недоступен.", show_alert=True)
             return
 
@@ -159,23 +169,42 @@ async def cb_profile_refill_no(callback: CallbackQuery) -> None:
 
 @router.message(InOnboardingSurvey())
 async def handle_survey_message(message: Message) -> None:
-    if not message.text:
-        return
-
     async with get_session() as session:
         member = await get_member_by_chat_id(session, message.chat.id)
         if member is None:
             await message.answer(UNKNOWN_USER_TEXT)
             return
 
-        if is_pause_request(message.text):
+        user_text: str | None = message.text
+        if message_has_audio(message):
+            source = detect_audio_source(message)
+            duration = source[2] if source else None
+            if not duration_ok(duration):
+                await message.answer(VOICE_TOO_LONG)
+                return
+            try:
+                user_text = await transcribe_message_audio(message.bot, message)
+            except EmptyTranscriptionError:
+                await message.answer(VOICE_NOTHING_HEARD)
+                return
+            except Exception:
+                await message.answer(VOICE_TRANSCRIBE_FAILED)
+                return
+            if not user_text:
+                await message.answer(VOICE_TRANSCRIBE_FAILED)
+                return
+
+        if not user_text:
+            return
+
+        if is_pause_request(user_text):
             reply = await pause_survey(session, member.id)
             await message.answer(reply)
             return
 
         try:
-            result = await process_survey_message(session, member, message.text)
-        except RuntimeError:
+            result = await process_survey_message(session, member, user_text)
+        except Exception:
             await message.answer(
                 "Сейчас не могу обработать ответ — попробуй чуть позже."
             )

@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+
 import httpx
 
 from app.llm.providers.base import Provider
+
+logger = logging.getLogger(__name__)
 
 _OPENAI_BASE = "https://api.openai.com/v1"
 
@@ -39,6 +43,13 @@ class OpenAIProvider(Provider):
                 headers={"Authorization": f"Bearer {self._api_key}"},
                 json=body,
             )
+            if response.is_error:
+                logger.warning(
+                    "LLM API %s model=%r: %s",
+                    response.status_code,
+                    self._model,
+                    response.text[:500],
+                )
             response.raise_for_status()
             data = response.json()
 
