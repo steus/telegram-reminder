@@ -8,10 +8,14 @@ from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommand
 from app.bot.command_names import (
     CMD_GOALS,
     CMD_GROUP,
+    CMD_MY_PROFILE,
+    CMD_MY_PROFILE_FILL,
 )
 
 _PARTICIPANT_COMMANDS = [
     BotCommand(command=CMD_GOALS, description="Задачи на неделю"),
+    BotCommand(command=CMD_MY_PROFILE, description="Мой профиль"),
+    BotCommand(command=CMD_MY_PROFILE_FILL, description="Заполнить анкету"),
     BotCommand(command="settings", description="Видимость, время, пинг"),
     BotCommand(command="start", description="Онбординг"),
     BotCommand(command="help", description="Справка по командам"),

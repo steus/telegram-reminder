@@ -31,8 +31,10 @@ from app.services.summary import (
     store_pending_summary,
     summary_confirm_prompt,
 )
-from app.bot.keyboards import kb_summary_send
+from app.bot.keyboards import kb_profile_start, kb_summary_send
 from app.services.tracking import process_checkin_message
+from app.services.profile_onboarding import PROFILE_NUDGE_TEXT, should_show_profile_nudge
+from app.db.repo import get_or_create_profile
 from app.services.voice import (
     EmptyTranscriptionError,
     VOICE_NOTHING_HEARD,
@@ -143,6 +145,9 @@ async def handle_checkin_freeform(message: Message) -> None:
         if not user_text:
             return
 
+        profile = await get_or_create_profile(session, member.id)
+        show_nudge = should_show_profile_nudge(profile)
+
         week_id, tasks = await load_checkin_tasks(session, member)
         if not tasks:
             await message.answer(
@@ -160,6 +165,9 @@ async def handle_checkin_freeform(message: Message) -> None:
 
         _, tasks = await load_checkin_tasks(session, member)
         stuck_tasks = [t for t in tasks if t.id in result.newly_stuck_task_ids]
+
+    if show_nudge:
+        await message.answer(PROFILE_NUDGE_TEXT, reply_markup=kb_profile_start())
 
     await message.answer(result.reply_text)
 

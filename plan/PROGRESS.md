@@ -13,7 +13,7 @@
 - [x] **Этап 6b** — Вступление через Telegram (`stage-6b-member-join.md`)
 - [x] **Этап 7** — Прогресс и деплой (`stage-7-stats-deploy.md`)
 - [ ] **Этап 8** — Профиль участника: анкета JTBD (`stage-8-profile.md`)
-  - [ ] 8A — анкета + профиль + подмешивание в разговорные ответы
+  - [ ] 8A — анкета + профиль + подмешивание в разговорные ответы *(код готов; локальная проверка — на операторе)*
   - [ ] 8B — каскад целей год→квартал→неделя в промптах
   - [ ] 8C — таблица «Эксперименты» (лог гипотез)
   - [ ] 8D — анти-галлюцинационный контур (Tavily + верификатор + guard)
@@ -80,3 +80,9 @@
   встреча+3, время = `checkin_time`). Деплой: `docker-compose.prod.yml` (лимиты,
   логи), `deploy/bot-tracker.service`, `scripts/backup_db.sh`, README. Бэкап
   проверен локально (`./scripts/backup_db.sh`).
+- **Этап 8A (в работе):** `member_profile` + `OnboardingStatus`, state
+  `onboarding_survey`. Сервис `profile_onboarding.py` (JTBD-интервью, `[STATE]`/
+  `[ПРОФИЛЬ_ГОТОВ]`, guard обязательных полей). Роутер `profile.py`, callback
+  `pf:start|later|refill:*`. Профиль в `PROMPT_TRACKING`/`PROMPT_DECOMPOSE_STEPS`;
+  nudge в чек-ине и декомпозиции. Миграция `e5f6a7b8c9d0`. Тесты
+  `tests/test_profile_onboarding.py`.

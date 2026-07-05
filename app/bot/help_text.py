@@ -18,6 +18,8 @@ from app.bot.command_names import (
     CMD_MY_GOALS_SUBMIT,
     CMD_MY_GOALS_UPDATE,
     CMD_MY_GOALS_VIEW,
+    CMD_MY_PROFILE,
+    CMD_MY_PROFILE_FILL,
 )
 from app.db.repo import get_group_by_facilitator_chat_id
 from app.db.session import get_session
@@ -36,6 +38,10 @@ async def build_help_text(chat_id: int) -> str:
         "Те же действия отдельными командами:",
         f"/{CMD_MY_GOALS_SET}, /{CMD_MY_GOALS_VIEW}, /{CMD_MY_GOALS_UPDATE}, "
         f"/{CMD_MY_GOALS_STATS}, /{CMD_MY_GOALS_SUBMIT}",
+        "",
+        "Профиль:",
+        f"/{CMD_MY_PROFILE} — посмотреть анкету",
+        f"/{CMD_MY_PROFILE_FILL} — заполнить или обновить анкету",
     ]
 
     async with get_session() as session:

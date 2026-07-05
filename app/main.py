@@ -9,7 +9,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from app.bot.commands import register_bot_commands
-from app.bot.routers import checkin, common, decompose, facilitator, membership, onboarding, tasks
+from app.bot.routers import checkin, common, decompose, facilitator, membership, onboarding, profile, tasks
 from app.bot.routers import settings as settings_router
 from app.config import settings
 from app.db.repo import list_all_facilitator_chat_ids
@@ -28,6 +28,7 @@ async def main() -> None:
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(membership.router)
     dp.include_router(onboarding.router)
+    dp.include_router(profile.router)
     dp.include_router(settings_router.router)
     dp.include_router(facilitator.router)
     dp.include_router(tasks.router)

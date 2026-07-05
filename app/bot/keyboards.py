@@ -100,6 +100,54 @@ def kb_decompose_confirm(task_id: int) -> InlineKeyboardMarkup:
         ]
     )
 
+
+def kb_profile_start() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Заполнить анкету",
+                    callback_data="pf:start",
+                ),
+            ]
+        ]
+    )
+
+
+def kb_profile_offer_after_onboarding() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Заполнить анкету",
+                    callback_data="pf:start",
+                ),
+                InlineKeyboardButton(
+                    text="Позже",
+                    callback_data="pf:later",
+                ),
+            ]
+        ]
+    )
+
+
+def kb_profile_refill_confirm() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Да, обновить",
+                    callback_data="pf:refill:yes",
+                ),
+                InlineKeyboardButton(
+                    text="Нет, оставить",
+                    callback_data="pf:refill:no",
+                ),
+            ]
+        ]
+    )
+
+
 WEEKDAYS = (
     (0, "Пн"),
     (1, "Вт"),

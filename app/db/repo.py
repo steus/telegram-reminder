@@ -18,8 +18,10 @@ from app.db.models import (
     GroupFacilitator,
     InputMode,
     Member,
+    MemberProfile,
     MembershipRequest,
     MembershipRequestStatus,
+    OnboardingStatus,
     SharedScope,
     Summary,
     Task,
@@ -697,3 +699,66 @@ async def create_decomposed_subtasks(
     parent_task.status = TaskStatus.decomposed
     await session.flush()
     return tasks
+
+
+async def get_profile(
+    session: AsyncSession, member_id: int
+) -> MemberProfile | None:
+    return await session.get(MemberProfile, member_id)
+
+
+async def get_or_create_profile(
+    session: AsyncSession, member_id: int
+) -> MemberProfile:
+    profile = await session.get(MemberProfile, member_id)
+    if profile is None:
+        profile = MemberProfile(member_id=member_id)
+        session.add(profile)
+        await session.flush()
+    return profile
+
+
+async def set_profile_status(
+    session: AsyncSession,
+    member_id: int,
+    status: OnboardingStatus,
+) -> MemberProfile:
+    profile = await get_or_create_profile(session, member_id)
+    profile.status = status
+    await session.flush()
+    return profile
+
+
+async def save_profile_progress(
+    session: AsyncSession,
+    member_id: int,
+    buffer: str,
+    progress_json: str,
+) -> MemberProfile:
+    profile = await get_or_create_profile(session, member_id)
+    profile.onboarding_buffer = buffer
+    profile.progress_json = progress_json
+    await session.flush()
+    return profile
+
+
+async def complete_profile(
+    session: AsyncSession,
+    member_id: int,
+    profile_json: str,
+) -> MemberProfile:
+    profile = await get_or_create_profile(session, member_id)
+    profile.status = OnboardingStatus.completed
+    profile.profile_json = profile_json
+    profile.filled_at = datetime.now(dt_timezone.utc)
+    await session.flush()
+    return profile
+
+
+async def reset_profile_for_refill(session: AsyncSession, member_id: int) -> MemberProfile:
+    profile = await get_or_create_profile(session, member_id)
+    profile.status = OnboardingStatus.in_progress
+    profile.onboarding_buffer = "[]"
+    profile.progress_json = "{}"
+    await session.flush()
+    return profile

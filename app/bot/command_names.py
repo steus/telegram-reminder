@@ -11,6 +11,9 @@ CMD_MY_GOALS_UPDATE = "my_goals_update"
 CMD_MY_GOALS_STATS = "my_goals_stats"
 CMD_MY_GOALS_SUBMIT = "my_goals_submit"
 
+CMD_MY_PROFILE = "my_profile"
+CMD_MY_PROFILE_FILL = "my_profile_fill"
+
 # --- Ведущий: goals из транскрипта (Plaud) ---
 CMD_GROUP_PASTE_TRANSCRIPT = "group_paste_transcript"
 CMD_GROUP_PASTE_DONE = "group_paste_done"

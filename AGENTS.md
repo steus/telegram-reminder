@@ -39,13 +39,14 @@ app/
 ├── scheduler.py            # APScheduler: одна minute_tick джоба (не per-member)
 ├── db/{models,session,repo}.py   # доступ к БД — только через repo.py
 ├── bot/
-│   ├── routers/            # onboarding, tasks, checkin, decompose, settings,
+│   ├── routers/            # onboarding, profile, tasks, checkin, decompose, settings,
 │   │                       #   common, facilitator, membership
 │   ├── keyboards.py, states.py, fsm_sync.py, command_names.py, messages.py …
 ├── llm/{client.py, prompts.py, providers/}   # ask_llm + фолбэк; gemini/openai/anthropic/openrouter
 └── services/              # extraction, checkin, decompose, summary, plaud,
                            #   plaud_action_plan, voice, sheets, stats, midweek,
-                           #   goal_setup, auto_goal_setup, membership, tracking …
+                           #   goal_setup, auto_goal_setup, membership, tracking,
+                           #   profile_onboarding …
 alembic/   scripts/   deploy/   tests/   data/(app.db, в .gitignore)
 ```
 
@@ -72,7 +73,7 @@ status `pending|done|in_progress|stuck|decomposed`, parent_task_id, confirmed) �
 ## Команды (актуальные имена — `app/bot/command_names.py`)
 
 Участник: `/start`, `/settings`, `/my_goals_set`, `/my_goals_view`, `/my_goals_update`,
-`/my_goals_stats`, `/my_goals_submit`, `/help`.
+`/my_goals_stats`, `/my_goals_submit`, `/my_profile`, `/my_profile_fill`, `/help`.
 Ведущий (только chat_id из `group_facilitator`): `/group`, `/group_invite`, `/group_members`,
 `/group_requests`, `/group_set_plaud`, `/group_paste_transcript`, `/group_paste_done`,
 `/group_view_goals`, `/group_sync_goals`.

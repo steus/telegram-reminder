@@ -60,6 +60,15 @@ class DialogStateEnum(str, enum.Enum):
     confirming_tasks = "confirming_tasks"
     checkin = "checkin"
     decomposing = "decomposing"
+    onboarding_survey = "onboarding_survey"
+
+
+class OnboardingStatus(str, enum.Enum):
+    """Статус JTBD-анкеты участника."""
+
+    not_started = "not_started"
+    in_progress = "in_progress"
+    completed = "completed"
 
 
 class TaskSource(str, enum.Enum):
@@ -213,6 +222,9 @@ class Member(Base):
     dialog_state: Mapped["DialogState | None"] = relationship(
         back_populates="member", uselist=False, cascade="all, delete-orphan"
     )
+    profile: Mapped["MemberProfile | None"] = relationship(
+        back_populates="member", uselist=False, cascade="all, delete-orphan"
+    )
     tasks: Mapped[list["Task"]] = relationship(back_populates="member")
     summaries: Mapped[list["Summary"]] = relationship(back_populates="member")
 
@@ -234,6 +246,29 @@ class Summary(Base):
 
     member: Mapped["Member"] = relationship(back_populates="summaries")
     week: Mapped["Week"] = relationship()
+
+
+class MemberProfile(Base):
+    """JTBD-профиль участника (§8A, таблица «Профиль_Пользователя»)."""
+
+    __tablename__ = "member_profile"
+
+    member_id: Mapped[int] = mapped_column(ForeignKey("member.id"), primary_key=True)
+    status: Mapped[OnboardingStatus] = mapped_column(
+        Enum(OnboardingStatus, native_enum=False, length=16),
+        default=OnboardingStatus.not_started,
+    )
+    profile_json: Mapped[str] = mapped_column(Text, default="{}")
+    onboarding_buffer: Mapped[str] = mapped_column(Text, default="[]")
+    progress_json: Mapped[str] = mapped_column(Text, default="{}")
+    filled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    member: Mapped["Member"] = relationship(back_populates="profile")
 
 
 class DialogState(Base):

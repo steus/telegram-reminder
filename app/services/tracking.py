@@ -13,12 +13,13 @@ from app.bot.dialog_context import DialogContext
 from app.db.models import Member, Task, TaskStatus
 from app.db.repo import (
     get_or_create_dialog_state,
+    get_or_create_profile,
     list_tasks_for_member_week,
     update_dialog_context,
     update_task_status,
 )
 from app.llm.client import ask_llm
-from app.llm.prompts import PROMPT_TRACKING
+from app.llm.prompts import PROMPT_TRACKING, build_profile_context
 
 logger = logging.getLogger(__name__)
 
@@ -93,9 +94,16 @@ def strip_machine_markers(text: str) -> str:
 
 
 def build_tracking_messages(
-    tasks: list[Task], history: list[dict[str, str]]
+    tasks: list[Task],
+    history: list[dict[str, str]],
+    *,
+    profile_json: str = "{}",
 ) -> list[dict[str, str]]:
-    system = PROMPT_TRACKING.format(tasks=format_tasks_for_prompt(tasks))
+    profile = build_profile_context(profile_json)
+    system = PROMPT_TRACKING.format(
+        profile=profile,
+        tasks=format_tasks_for_prompt(tasks),
+    )
     messages: list[dict[str, str]] = [{"role": "system", "content": system}]
     messages.extend(history)
     return messages
@@ -131,7 +139,12 @@ async def process_checkin_message(
     ctx = DialogContext.from_json(dialog.context_json)
 
     ctx.append_checkin_message("user", user_text)
-    messages = build_tracking_messages(tasks, ctx.checkin_messages or [])
+    profile = await get_or_create_profile(session, member.id)
+    messages = build_tracking_messages(
+        tasks,
+        ctx.checkin_messages or [],
+        profile_json=profile.profile_json,
+    )
 
     raw = await ask_llm(messages)
     updates = parse_status_updates(raw)

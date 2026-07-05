@@ -13,12 +13,13 @@ from app.db.repo import (
     create_decomposed_subtasks,
     get_or_create_dialog_state,
     get_or_create_next_week,
+    get_or_create_profile,
     get_task_by_id,
     set_dialog_state,
     update_dialog_context,
 )
 from app.llm.client import ask_llm
-from app.llm.prompts import PROMPT_DECOMPOSE_STEPS
+from app.llm.prompts import PROMPT_DECOMPOSE_STEPS, build_profile_context
 from app.services.extraction import parse_json_string_array
 
 logger = logging.getLogger(__name__)
@@ -67,8 +68,14 @@ async def start_decompose_flow(
     ctx.start_decompose(task.id)
     await update_dialog_context(session, member.id, ctx.to_json())
 
+    profile = await get_or_create_profile(session, member.id)
+    profile_ctx = build_profile_context(profile.profile_json)
+    system = PROMPT_DECOMPOSE_STEPS.format(
+        profile=profile_ctx,
+        task_text=task.text,
+    )
     messages = [
-        {"role": "system", "content": PROMPT_DECOMPOSE_STEPS.format(task_text=task.text)},
+        {"role": "system", "content": system},
         {
             "role": "user",
             "content": "Участник согласился на помощь. Предложи шаги.",
@@ -117,8 +124,16 @@ async def continue_decompose_dialog(
 
     ctx.append_checkin_message("user", user_text)
     history = ctx.checkin_messages or []
+    profile = await get_or_create_profile(session, member.id)
+    profile_ctx = build_profile_context(profile.profile_json)
     messages = [
-        {"role": "system", "content": PROMPT_DECOMPOSE_STEPS.format(task_text=task.text)},
+        {
+            "role": "system",
+            "content": PROMPT_DECOMPOSE_STEPS.format(
+                profile=profile_ctx,
+                task_text=task.text,
+            ),
+        },
         *history,
     ]
     raw = await ask_llm(messages, json_mode=True)

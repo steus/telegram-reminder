@@ -13,10 +13,12 @@ from app.bot.dialog_context import DialogContext
 from app.bot.fsm_sync import sync_fsm_from_context
 from app.bot.onboarding_flow import onboarding_prompt, parse_checkin_time, parse_time_callback_data
 from app.bot.states import OnboardingStates
-from app.db.models import DialogStateEnum, InputMode, Visibility
+from app.bot.keyboards import kb_profile_offer_after_onboarding
+from app.db.models import DialogStateEnum, InputMode, OnboardingStatus, Visibility
 from app.db.repo import (
     get_member_by_chat_id,
     get_or_create_dialog_state,
+    get_or_create_profile,
     set_dialog_state,
     update_dialog_context,
     update_member_settings,
@@ -36,10 +38,16 @@ async def _send_step(message: Message, step: str) -> None:
 async def _finish_onboarding(message: Message, member_id: int, name: str) -> None:
     async with get_session() as session:
         await set_dialog_state(session, member_id, DialogStateEnum.idle)
+        await get_or_create_profile(session, member_id)
     await message.answer(
         f"Готово, {name}! Настройки сохранены — буду рядом, когда понадоблюсь.\n\n"
         "Если захочешь что-то поменять — /settings.\n"
         "Справка по командам — /help."
+    )
+    await message.answer(
+        "Ещё одно необязательное: короткая анкета про бизнес и цели — "
+        "чтобы советы были точнее под тебя.",
+        reply_markup=kb_profile_offer_after_onboarding(),
     )
 
 
@@ -63,11 +71,17 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         ctx = DialogContext.from_json(dialog.context_json)
 
         if ctx.onboarded:
-            await message.answer(
+            profile = await get_or_create_profile(session, member.id)
+            welcome = (
                 f"С возвращением, {member.full_name}! "
                 "Настройки можно поменять в /settings.\n"
                 "Справка по командам — /help."
             )
+            if profile.status == OnboardingStatus.in_progress:
+                welcome += (
+                    "\n\nУ тебя незавершённая анкета — продолжить: /my_profile_fill"
+                )
+            await message.answer(welcome)
             await state.clear()
             return
 

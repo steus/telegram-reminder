@@ -9,7 +9,9 @@ from aiogram.filters import BaseFilter
 from aiogram.types import CallbackQuery, Message
 
 from app.bot.dialog_context import DialogContext
-from app.bot.keyboards import kb_decompose_confirm
+from app.bot.keyboards import kb_decompose_confirm, kb_profile_start
+from app.services.profile_onboarding import PROFILE_NUDGE_TEXT, should_show_profile_nudge
+from app.db.repo import get_or_create_profile
 from app.bot.messages import UNKNOWN_USER_TEXT
 from app.db.models import DialogStateEnum
 from app.db.repo import (
@@ -86,12 +88,17 @@ async def cb_decompose_offer(callback: CallbackQuery) -> None:
             await set_dialog_state(session, member.id, DialogStateEnum.checkin)
             reply = DECOMPOSE_DECLINED
             markup = None
+            show_nudge = False
         else:
+            profile = await get_or_create_profile(session, member.id)
+            show_nudge = should_show_profile_nudge(profile)
             reply = await start_decompose_flow(session, member, task)
             markup = kb_decompose_confirm(task_id)
 
     await callback.answer()
     await callback.message.edit_reply_markup(reply_markup=None)
+    if show_nudge:
+        await callback.message.answer(PROFILE_NUDGE_TEXT, reply_markup=kb_profile_start())
     await callback.message.answer(reply, reply_markup=markup)
 
 
@@ -178,6 +185,9 @@ async def handle_decompose_input(message: Message) -> None:
         if not user_text:
             return
 
+        profile = await get_or_create_profile(session, member.id)
+        show_nudge = should_show_profile_nudge(profile)
+
         reply = await continue_decompose_dialog(session, member, user_text)
         dialog = await get_or_create_dialog_state(session, member.id)
         ctx = DialogContext.from_json(dialog.context_json)
@@ -186,5 +196,8 @@ async def handle_decompose_input(message: Message) -> None:
             if ctx.decompose_steps and ctx.decompose_task_id
             else None
         )
+
+    if show_nudge:
+        await message.answer(PROFILE_NUDGE_TEXT, reply_markup=kb_profile_start())
 
     await message.answer(reply, reply_markup=markup)
