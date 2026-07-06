@@ -8,7 +8,9 @@ from app.llm.prompts import build_profile_context
 from app.services.profile_onboarding import (
     REQUIRED_FIELD_KEYS,
     count_filled_fields,
+    format_pending_questions_for_resume,
     format_progress_line,
+    get_pending_assistant_replies,
     parse_profile_ready,
     parse_state_marker,
     strip_survey_markers,
@@ -118,3 +120,29 @@ def test_build_profile_context_full() -> None:
 
 def test_required_field_keys_count() -> None:
     assert len(REQUIRED_FIELD_KEYS) == 8
+
+
+def test_get_pending_assistant_replies() -> None:
+    buffer = [
+        {"role": "user", "content": "Привет"},
+        {"role": "assistant", "content": "Расскажи про нишу"},
+        {"role": "user", "content": "EdTech"},
+        {"role": "assistant", "content": "Какие соцсети ведёшь?"},
+    ]
+    assert get_pending_assistant_replies(buffer) == ["Какие соцсети ведёшь?"]
+    assert format_pending_questions_for_resume(buffer) == "Какие соцсети ведёшь?"
+
+    multi_pending = [
+        {"role": "user", "content": "ответ"},
+        {"role": "assistant", "content": "Уточни аудиторию"},
+        {"role": "assistant", "content": "И как часто постишь?"},
+    ]
+    assert get_pending_assistant_replies(multi_pending) == [
+        "Уточни аудиторию",
+        "И как часто постишь?",
+    ]
+    assert format_pending_questions_for_resume(multi_pending) == (
+        "Уточни аудиторию\n\nИ как часто постишь?"
+    )
+    assert get_pending_assistant_replies([]) == []
+    assert format_pending_questions_for_resume([]) is None

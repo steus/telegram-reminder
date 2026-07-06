@@ -193,6 +193,35 @@ def count_filled_fields(progress: dict[str, Any]) -> int:
     return len([k for k in filled if k in REQUIRED_FIELD_KEYS])
 
 
+def get_pending_assistant_replies(buffer: list[dict[str, str]]) -> list[str]:
+    """Сообщения бота после последнего ответа пользователя — ждут ответа.
+
+    Интервью идёт по одному ходу LLM (1–2 вопроса в сообщении). Обычно здесь
+    один элемент; если накопилось несколько — показываем все.
+    """
+    last_user_idx = -1
+    for i, item in enumerate(buffer):
+        if item.get("role") == "user":
+            last_user_idx = i
+
+    start = last_user_idx + 1 if last_user_idx >= 0 else 0
+    pending: list[str] = []
+    for item in buffer[start:]:
+        if item.get("role") != "assistant":
+            continue
+        content = str(item.get("content", "")).strip()
+        if content:
+            pending.append(content)
+    return pending
+
+
+def format_pending_questions_for_resume(buffer: list[dict[str, str]]) -> str | None:
+    pending = get_pending_assistant_replies(buffer)
+    if not pending:
+        return None
+    return "\n\n".join(pending)
+
+
 def format_progress_line(progress: dict[str, Any]) -> str:
     filled_count = count_filled_fields(progress)
     block = progress.get("block", 1)
@@ -329,7 +358,11 @@ async def start_survey(
     await set_dialog_state(session, member.id, DialogStateEnum.onboarding_survey)
 
     if resume and profile.onboarding_buffer and profile.onboarding_buffer != "[]":
+        buffer = _load_buffer(profile.onboarding_buffer)
         progress = _load_progress(profile.progress_json)
+        pending_text = format_pending_questions_for_resume(buffer)
+        if pending_text:
+            return f"{SURVEY_RESUME}\n\n{pending_text}{format_progress_line(progress)}"
         return f"{SURVEY_RESUME}{format_progress_line(progress)}"
 
     buffer: list[dict[str, str]] = []
