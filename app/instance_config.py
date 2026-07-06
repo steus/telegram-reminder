@@ -77,7 +77,12 @@ def load_instance_config() -> InstanceConfig:
     from app.config import settings
 
     path = _resolve_config_path(settings.instance_config)
-    return parse_instance_config(_load_raw_config(path))
+    try:
+        return parse_instance_config(_load_raw_config(path))
+    except FileNotFoundError:
+        if path != _DEFAULT_CONFIG_PATH:
+            raise
+        return parse_instance_config({})
 
 
 def get_onboarding_steps(config: InstanceConfig | None = None) -> tuple[str, ...]:
