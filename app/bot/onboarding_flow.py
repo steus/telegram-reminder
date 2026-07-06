@@ -2,12 +2,35 @@
 
 from __future__ import annotations
 
+import re
 from datetime import time
 
 from aiogram.types import InlineKeyboardMarkup
 
 from app.bot import keyboards as kb
 from app.bot.dialog_context import DialogContext
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def parse_email(text: str) -> str | None:
+    value = text.strip()
+    if not value or not _EMAIL_RE.match(value):
+        return None
+    return value
+
+
+def parse_phone(text: str) -> str | None:
+    raw = text.strip()
+    if not raw:
+        return None
+    has_plus = raw.startswith("+")
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if len(digits) < 10 or len(digits) > 15:
+        return None
+    if has_plus:
+        return f"+{digits}"
+    return digits
 
 
 def parse_checkin_time(text: str) -> time | None:
@@ -45,6 +68,16 @@ def onboarding_prompt(step: str) -> tuple[str, InlineKeyboardMarkup | None]:
             "Ты всегда увидишь его первым — и только после твоего «ок» "
             "он уйдёт дальше по выбранному правилу.",
             kb.kb_visibility(),
+        ),
+        "email": (
+            "Оставь email — пригодится для связи и напоминаний вне Telegram.\n"
+            "Напиши одним сообщением, например: name@example.com",
+            None,
+        ),
+        "phone": (
+            "И телефон — на случай, если в Telegram не дозвониться.\n"
+            "Можно с +7 или без, например: +7 900 123-45-67",
+            None,
         ),
         "weekday": (
             "В какой день недели тебе удобнее делать чек-ин перед встречей?",

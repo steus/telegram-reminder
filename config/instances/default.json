@@ -1,0 +1,10 @@
+{
+  "id": "default",
+  "onboarding": {
+    "collect_email": false,
+    "collect_phone": false
+  },
+  "features": {
+    "jtbd_profile": false
+  }
+}

@@ -418,6 +418,8 @@ async def update_member_settings(
     checkin_time: time | None = None,
     midweek_ping: bool | None = None,
     timezone: str | None = None,
+    email: str | None = None,
+    phone: str | None = None,
 ) -> Member:
     if input_mode is not None:
         member.input_mode = input_mode
@@ -431,6 +433,10 @@ async def update_member_settings(
         member.midweek_ping = midweek_ping
     if timezone is not None:
         member.timezone = timezone
+    if email is not None:
+        member.email = email
+    if phone is not None:
+        member.phone = phone
     await session.flush()
     return member
 

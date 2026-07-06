@@ -362,7 +362,8 @@ async def send_group_members(message: Message, group) -> None:
         facilitator_ids = set(await list_group_facilitator_chat_ids(session, group.id))
 
     rows = [
-        (m.id, m.full_name, m.telegram_chat_id, m.is_active) for m in members
+        (m.id, m.full_name, m.telegram_chat_id, m.is_active, m.email, m.phone)
+        for m in members
     ]
     text = format_members_list(members=rows, facilitator_chat_ids=facilitator_ids)
     keyboard = kb_group_members(members, facilitator_ids)

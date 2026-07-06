@@ -30,7 +30,7 @@
 1. git clone → cd в папку инстанса
 2. git checkout <ветка или тег>
 3. bash scripts/setup_direct.sh
-4. nano .env          — токен, LLM, Whisper, путь к Google JSON
+4. nano .env          — токен, LLM, Whisper, путь к Google JSON, INSTANCE_CONFIG
 5. Запуск бота        — .venv/bin/python -m app.main (или systemd)
 6. /group в Telegram  — узнать свой chat_id (ВАЖНО, см. §5)
 7. seed_member.py     — первый участник / ведущий с правильным chat_id
@@ -54,7 +54,7 @@ cd /opt/bot-school
 - **Актуальная разработка:** остаться на `main`
 
 Код у всех инстансов **один и тот же** (разные версии из git). Отличия между
-ботами — только в `.env`, `./data/` и `sheet_id` группы в БД.
+ботами — в `.env`, `config/instances/*.json`, `./data/` и `sheet_id` группы в БД.
 
 ---
 
@@ -126,7 +126,55 @@ WHISPER_MODE=api
 OPENAI_API_KEY=sk-...                     # для Whisper API
 
 GOOGLE_SERVICE_ACCOUNT_JSON=/opt/bot-school/credentials/google-sa.json
+
+# Опционально: шаги онбординга и фичи инстанса (см. §3.1)
+INSTANCE_CONFIG=config/instances/default.json
 ```
+
+### 3.1. Конфиг инстанса (`INSTANCE_CONFIG`)
+
+Для каждого проекта можно задать отдельный JSON с особенностями логики —
+какие шаги онбординга включать, какие фичи использовать.
+
+Файлы лежат в `config/instances/`:
+
+| Файл | Назначение |
+|------|------------|
+| `default.json` | Базовый онбординг без email/телефона |
+| `marina.json` | Сбор email и телефона на `/start` |
+
+В `.env` укажите путь (относительно папки проекта или абсолютный):
+
+```bash
+INSTANCE_CONFIG=config/instances/marina.json
+```
+
+Если переменная не задана — используется `config/instances/default.json`.
+
+Пример `config/instances/marina.json`:
+
+```json
+{
+  "id": "marina",
+  "onboarding": {
+    "collect_email": true,
+    "collect_phone": true
+  },
+  "features": {
+    "jtbd_profile": false
+  }
+}
+```
+
+При включённых `collect_email` / `collect_phone` бот спрашивает контакты
+после шага «видимость итога недели», до выбора дня чек-ина. Данные сохраняются
+в таблице `member` и видны ведущему в `/group_members`.
+
+Флаг `jtbd_profile` зарезервирован под расширенную JTBD-анкету (ветка `main`);
+на `stable` пока не используется.
+
+Новый инстанс: скопируйте `default.json` → `my-project.json`, включите нужные
+флаги и пропишите путь в `.env`.
 
 ### DATABASE_URL — менять не нужно
 
@@ -543,9 +591,14 @@ WHISPER_MODE=api
 OPENAI_API_KEY=sk-...
 
 GOOGLE_SERVICE_ACCOUNT_JSON=/opt/bot-school/credentials/google-sa.json
+
+INSTANCE_CONFIG=config/instances/marina.json
 ```
 
 `UID`/`GID` — не заполняем (direct-запуск).
+
+На онбординге бот запросит email и телефон (см. [§3.1](#31-конфиг-инстанса-instance_config)).
+Контакты участников — в `/group_members` у ведущего.
 
 ### Шаг 3. Google Sheets
 

@@ -7,7 +7,9 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 
-ONBOARDING_STEPS = ("input_mode", "visibility", "weekday", "time", "ping")
+from app.instance_config import get_onboarding_steps
+
+
 MAX_CHECKIN_MESSAGES = 10
 
 
@@ -59,24 +61,30 @@ class DialogContext:
 
     def start_onboarding(self) -> None:
         self.onboarded = False
-        self.step = ONBOARDING_STEPS[0]
+        steps = get_onboarding_steps()
+        self.step = steps[0] if steps else None
         self.settings_field = None
 
     def advance_onboarding(self) -> bool:
         """Перейти к следующему шагу. True — онбординг завершён."""
+        steps = get_onboarding_steps()
+        if not steps:
+            self.onboarded = True
+            self.step = None
+            return True
         if self.step is None:
             self.start_onboarding()
             return False
         try:
-            idx = ONBOARDING_STEPS.index(self.step)
+            idx = steps.index(self.step)
         except ValueError:
-            self.step = ONBOARDING_STEPS[0]
+            self.step = steps[0]
             return False
-        if idx + 1 >= len(ONBOARDING_STEPS):
+        if idx + 1 >= len(steps):
             self.onboarded = True
             self.step = None
             return True
-        self.step = ONBOARDING_STEPS[idx + 1]
+        self.step = steps[idx + 1]
         return False
 
     def begin_settings_edit(self, field: str) -> None:
