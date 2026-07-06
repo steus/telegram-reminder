@@ -32,3 +32,14 @@ def test_facilitator_paste_survives_other_fields() -> None:
     restored = DialogContext.from_json(ctx.to_json())
     assert restored.settings_field == "im"
     assert restored.facilitator_group_id == 42
+
+
+def test_my_goals_set_clears_facilitator_paste() -> None:
+    ctx = DialogContext(onboarded=True)
+    ctx.start_facilitator_paste(1)
+    ctx.append_facilitator_paste("@Степан\n- старая задача")
+    ctx.start_task_collection()
+    ctx.clear_facilitator_paste()
+    assert ctx.task_step == "collect"
+    assert not ctx.is_facilitator_pasting()
+    assert ctx.facilitator_pending is None
