@@ -70,7 +70,7 @@ def test_parse_email() -> None:
 
 
 def test_parse_phone() -> None:
-    assert parse_phone("+7 900 123-45-67") == "+79001234567"
+    assert parse_phone("+372 51234567") == "+37251234567"
     assert parse_phone("89001234567") == "89001234567"
     assert parse_phone("123") is None
 

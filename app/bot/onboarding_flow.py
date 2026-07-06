@@ -76,7 +76,7 @@ def onboarding_prompt(step: str) -> tuple[str, InlineKeyboardMarkup | None]:
         ),
         "phone": (
             "И телефон — на случай, если в Telegram не дозвониться.\n"
-            "Можно с +7 или без, например: +7 900 123-45-67",
+            "Можно с +372 или без, например: +372 51234567",
             None,
         ),
         "weekday": (
@@ -111,7 +111,7 @@ def settings_edit_prompt(field: str) -> tuple[str, InlineKeyboardMarkup | None]:
             kb.kb_settings_back(),
         ),
         "phone": (
-            "Напиши телефон, например: +7 900 123-45-67",
+            "Напиши телефон, например: +372 51234567",
             kb.kb_settings_back(),
         ),
     }

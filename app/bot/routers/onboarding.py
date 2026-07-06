@@ -217,7 +217,7 @@ async def msg_onboarding_phone(message: Message, state: FSMContext) -> None:
     phone = parse_phone(message.text)
     if phone is None:
         await message.answer(
-            "Не получилось разобрать номер. Попробуй ещё раз, например: +7 900 123-45-67"
+            "Не получилось разобрать номер. Попробуй ещё раз, например: +372 51234567"
         )
         return
 
