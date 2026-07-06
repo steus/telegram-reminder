@@ -11,7 +11,13 @@ from aiogram.types import CallbackQuery, Message
 
 from app.bot.dialog_context import DialogContext
 from app.bot.fsm_sync import sync_fsm_from_context
-from app.bot.onboarding_flow import onboarding_prompt, parse_checkin_time, parse_time_callback_data
+from app.bot.onboarding_flow import (
+    onboarding_prompt,
+    parse_checkin_time,
+    parse_email,
+    parse_phone,
+    parse_time_callback_data,
+)
 from app.bot.states import OnboardingStates
 from app.bot.keyboards import kb_profile_offer_after_onboarding
 from app.db.models import DialogStateEnum, InputMode, OnboardingStatus, Visibility
@@ -32,6 +38,9 @@ router = Router(name="onboarding")
 
 async def _send_step(message: Message, step: str) -> None:
     text, keyboard = onboarding_prompt(step)
+    if keyboard is None:
+        await message.answer(text)
+        return
     await message.answer(text, reply_markup=keyboard)
 
 
@@ -49,6 +58,27 @@ async def _finish_onboarding(message: Message, member_id: int, name: str) -> Non
         "чтобы советы были точнее под тебя.",
         reply_markup=kb_profile_offer_after_onboarding(),
     )
+
+
+async def _proceed_after_onboarding_step(
+    message: Message,
+    state: FSMContext,
+    *,
+    member_id: int,
+    name: str,
+    ctx: DialogContext,
+) -> None:
+    if ctx.onboarded:
+        await _finish_onboarding(message, member_id, name)
+        await state.clear()
+        return
+
+    await sync_fsm_from_context(state, ctx)
+    text, keyboard = onboarding_prompt(ctx.step or "ping")
+    if keyboard is None:
+        await message.answer(text)
+        return
+    await message.answer(text, reply_markup=keyboard)
 
 
 @router.message(CommandStart())
@@ -161,6 +191,68 @@ async def cb_onboarding_visibility(callback: CallbackQuery, state: FSMContext) -
     await sync_fsm_from_context(state, ctx)
     text, keyboard = onboarding_prompt(ctx.step or "weekday")
     await callback.message.edit_text(text, reply_markup=keyboard)
+
+
+@router.message(OnboardingStates.email, F.text)
+async def msg_onboarding_email(message: Message, state: FSMContext) -> None:
+    if not message.text:
+        return
+    email = parse_email(message.text)
+    if email is None:
+        await message.answer(
+            "Не похоже на email. Попробуй ещё раз, например: name@example.com"
+        )
+        return
+
+    async with get_session() as session:
+        member = await get_member_by_chat_id(session, message.chat.id)
+        if member is None:
+            await message.answer(UNKNOWN_USER_TEXT)
+            return
+        await update_member_settings(session, member, email=email)
+        dialog = await get_or_create_dialog_state(session, member.id)
+        ctx = DialogContext.from_json(dialog.context_json)
+        ctx.advance_onboarding()
+        await update_dialog_context(session, member.id, ctx.to_json())
+        name = member.full_name
+        member_id = member.id
+        if ctx.onboarded:
+            await set_dialog_state(session, member_id, DialogStateEnum.idle)
+
+    await _proceed_after_onboarding_step(
+        message, state, member_id=member_id, name=name, ctx=ctx
+    )
+
+
+@router.message(OnboardingStates.phone, F.text)
+async def msg_onboarding_phone(message: Message, state: FSMContext) -> None:
+    if not message.text:
+        return
+    phone = parse_phone(message.text)
+    if phone is None:
+        await message.answer(
+            "Не получилось разобрать номер. Попробуй ещё раз, например: +372 51234567 или 51234567"
+        )
+        return
+
+    async with get_session() as session:
+        member = await get_member_by_chat_id(session, message.chat.id)
+        if member is None:
+            await message.answer(UNKNOWN_USER_TEXT)
+            return
+        await update_member_settings(session, member, phone=phone)
+        dialog = await get_or_create_dialog_state(session, member.id)
+        ctx = DialogContext.from_json(dialog.context_json)
+        ctx.advance_onboarding()
+        await update_dialog_context(session, member.id, ctx.to_json())
+        name = member.full_name
+        member_id = member.id
+        if ctx.onboarded:
+            await set_dialog_state(session, member_id, DialogStateEnum.idle)
+
+    await _proceed_after_onboarding_step(
+        message, state, member_id=member_id, name=name, ctx=ctx
+    )
 
 
 @router.callback_query(F.data.startswith("ob:wd:"))

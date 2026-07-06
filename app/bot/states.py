@@ -8,6 +8,8 @@ from aiogram.fsm.state import State, StatesGroup
 class OnboardingStates(StatesGroup):
     input_mode = State()
     visibility = State()
+    email = State()
+    phone = State()
     weekday = State()
     time = State()
     custom_time = State()
@@ -18,6 +20,8 @@ class SettingsStates(StatesGroup):
     menu = State()
     editing = State()
     custom_time = State()
+    email = State()
+    phone = State()
 
 
 class TaskStates(StatesGroup):

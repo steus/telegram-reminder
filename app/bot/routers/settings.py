@@ -10,7 +10,13 @@ from aiogram.types import CallbackQuery, Message
 from app.bot.dialog_context import DialogContext
 from app.bot.fsm_sync import sync_fsm_from_context
 from app.bot import keyboards as kb
-from app.bot.onboarding_flow import parse_checkin_time, parse_time_callback_data, settings_edit_prompt
+from app.bot.onboarding_flow import (
+    parse_checkin_time,
+    parse_email,
+    parse_phone,
+    parse_time_callback_data,
+    settings_edit_prompt,
+)
 from app.bot.messages import CUSTOM_TIME_TEXT, UNKNOWN_USER_TEXT
 from app.bot.states import SettingsStates
 from app.db.models import InputMode, Visibility
@@ -174,6 +180,53 @@ async def msg_settings_custom_time(message: Message, state: FSMContext) -> None:
     await state.set_state(SettingsStates.menu)
     await message.answer(
         f"Время обновлено.\n\n{summary}",
+        reply_markup=kb.kb_settings_menu(),
+    )
+
+
+@router.message(SettingsStates.email, F.text)
+async def msg_settings_email(message: Message, state: FSMContext) -> None:
+    if not message.text:
+        return
+    email = parse_email(message.text)
+    if email is None:
+        await message.answer(
+            "Не похоже на email. Попробуй ещё раз, например: name@example.com"
+        )
+        return
+    await _save_contact_setting(message, state, email=email)
+
+
+@router.message(SettingsStates.phone, F.text)
+async def msg_settings_phone(message: Message, state: FSMContext) -> None:
+    if not message.text:
+        return
+    phone = parse_phone(message.text)
+    if phone is None:
+        await message.answer(
+            "Не получилось разобрать номер. Попробуй ещё раз, например: +372 51234567 или 51234567"
+        )
+        return
+    await _save_contact_setting(message, state, phone=phone)
+
+
+async def _save_contact_setting(message: Message, state: FSMContext, **fields) -> None:
+    async with get_session() as session:
+        member = await get_member_by_chat_id(session, message.chat.id)
+        if member is None:
+            await message.answer(UNKNOWN_USER_TEXT)
+            return
+        await update_member_settings(session, member, **fields)
+        dialog = await get_or_create_dialog_state(session, member.id)
+        ctx = DialogContext.from_json(dialog.context_json)
+        ctx.clear_settings_edit()
+        await update_dialog_context(session, member.id, ctx.to_json())
+        summary = kb.format_member_settings(member)
+
+    await state.set_state(SettingsStates.menu)
+    label = "Email" if "email" in fields else "Телефон"
+    await message.answer(
+        f"{label} обновлён.\n\n{summary}\n\nЧто ещё изменить?",
         reply_markup=kb.kb_settings_menu(),
     )
 

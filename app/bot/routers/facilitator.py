@@ -238,14 +238,19 @@ class FacilitatorText(BaseFilter):
             if member is not None:
                 dialog = await get_or_create_dialog_state(session, member.id)
                 ctx = DialogContext.from_json(dialog.context_json)
-                if ctx.is_facilitator_pasting() or has_action_plan_markers(text):
-                    return True
+                # Свои задачи (/my_goals_set) важнее незавершённой вставки транскрипта.
+                if dialog.state == DialogStateEnum.confirming_tasks and ctx.task_step in (
+                    "collect",
+                    "correct",
+                ):
+                    return False
                 if dialog.state in (
-                    DialogStateEnum.confirming_tasks,
                     DialogStateEnum.checkin,
                     DialogStateEnum.decomposing,
                 ):
                     return False
+                if ctx.is_facilitator_pasting() or has_action_plan_markers(text):
+                    return True
         return True
 
 
@@ -412,6 +417,7 @@ async def _begin_paste_transcript(message: Message, state: FSMContext):
             member_id = member.id
             dialog = await get_or_create_dialog_state(session, member.id)
             ctx = DialogContext.from_json(dialog.context_json)
+            ctx.clear_task_flow()
             ctx.start_facilitator_paste(group.id)
             await update_dialog_context(session, member.id, ctx.to_json())
 

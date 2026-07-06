@@ -30,6 +30,7 @@ from app.db.repo import (
 )
 from app.services.membership import (
     build_invite_link,
+    format_members_list,
     parse_start_invite_code,
     validate_member_name_latin,
 )
@@ -52,6 +53,27 @@ def test_validate_member_name_latin() -> None:
 
 def test_build_invite_link() -> None:
     assert build_invite_link("my_bot", "deadbeef") == "https://t.me/my_bot?start=join_deadbeef"
+
+
+def test_format_members_list_with_contacts() -> None:
+    text = format_members_list(
+        members=[
+            (1, "Stepan", "100", True, "stepan@example.com", "+79001234567"),
+            (2, "Anna", "101", True, None, None),
+        ],
+        facilitator_chat_ids={"100"},
+    )
+    assert "Stepan (ведущий) — id 1" in text
+    assert "email: stepan@example.com" in text
+    assert "тел.: +79001234567" in text
+    assert "Anna — id 2" in text
+    assert "email:" not in text.split("Anna")[1]
+
+
+def test_format_members_list_empty() -> None:
+    assert format_members_list(members=[], facilitator_chat_ids=set()) == (
+        "В группе пока нет активных участников."
+    )
 
 
 @pytest.fixture

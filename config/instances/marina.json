@@ -1,0 +1,10 @@
+{
+  "id": "marina",
+  "onboarding": {
+    "collect_email": true,
+    "collect_phone": true
+  },
+  "features": {
+    "jtbd_profile": false
+  }
+}

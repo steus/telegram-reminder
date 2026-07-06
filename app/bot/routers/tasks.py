@@ -118,8 +118,10 @@ async def send_my_goals_set(message: Message, state: FSMContext) -> None:
 
         await start_private_goal_collection(session, member)
         ctx.start_task_collection()
+        ctx.clear_facilitator_paste()
         await update_dialog_context(session, member.id, ctx.to_json())
 
+    await state.update_data(facilitator_group_id=None, pending_transcript=None)
     await state.set_state(TaskStates.collecting)
     await message.answer(GOAL_COLLECTION_PROMPT)
 

@@ -50,5 +50,10 @@ class Settings(BaseSettings):
         None, alias="GOOGLE_SERVICE_ACCOUNT_JSON"
     )
 
+    # --- Конфиг инстанса (фичи и шаги онбординга) ---
+    instance_config: str | None = Field(
+        None, alias="INSTANCE_CONFIG"
+    )
+
 
 settings = Settings()

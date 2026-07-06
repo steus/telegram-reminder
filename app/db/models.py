@@ -217,6 +217,8 @@ class Member(Base):
     timezone: Mapped[str] = mapped_column(String(64), default="Europe/Tallinn")
     midweek_ping: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     group: Mapped["Group"] = relationship(back_populates="members")
     dialog_state: Mapped["DialogState | None"] = relationship(

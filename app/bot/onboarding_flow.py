@@ -2,12 +2,39 @@
 
 from __future__ import annotations
 
+import re
 from datetime import time
 
 from aiogram.types import InlineKeyboardMarkup
 
 from app.bot import keyboards as kb
 from app.bot.dialog_context import DialogContext
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def parse_email(text: str) -> str | None:
+    value = text.strip()
+    if not value or not _EMAIL_RE.match(value):
+        return None
+    return value
+
+
+def parse_phone(text: str) -> str | None:
+    raw = text.strip()
+    if not raw:
+        return None
+    has_plus = raw.startswith("+")
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if len(digits) > 15:
+        return None
+    if has_plus:
+        if len(digits) < 8:
+            return None
+        return f"+{digits}"
+    if len(digits) < 7:
+        return None
+    return digits
 
 
 def parse_checkin_time(text: str) -> time | None:
@@ -46,6 +73,16 @@ def onboarding_prompt(step: str) -> tuple[str, InlineKeyboardMarkup | None]:
             "он уйдёт дальше по выбранному правилу.",
             kb.kb_visibility(),
         ),
+        "email": (
+            "Оставь email — пригодится для связи и напоминаний вне Telegram.\n"
+            "Напиши одним сообщением, например: name@example.com",
+            None,
+        ),
+        "phone": (
+            "И телефон — на случай, если в Telegram не дозвониться.\n"
+            "Можно с +372 или без, например: +372 51234567 или 51234567",
+            None,
+        ),
         "weekday": (
             "В какой день недели тебе удобнее делать чек-ин перед встречей?",
             kb.kb_weekday(),
@@ -73,6 +110,14 @@ def settings_edit_prompt(field: str) -> tuple[str, InlineKeyboardMarkup | None]:
             kb.kb_time(prefix="st:tm", custom_cb="st:tm:custom"),
         ),
         "ping": ("Пинг в середине недели:", kb.kb_ping(prefix="st:ping")),
+        "email": (
+            "Напиши email одним сообщением, например: name@example.com",
+            kb.kb_settings_back(),
+        ),
+        "phone": (
+            "Напиши телефон, например: +372 51234567 или 51234567",
+            kb.kb_settings_back(),
+        ),
     }
     text, keyboard = mapping[field]
     return text, keyboard
