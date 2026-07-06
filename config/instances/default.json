@@ -5,6 +5,6 @@
     "collect_phone": false
   },
   "features": {
-    "jtbd_profile": false
+    "jtbd_profile": true
   }
 }
