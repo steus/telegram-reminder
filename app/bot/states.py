@@ -20,6 +20,8 @@ class SettingsStates(StatesGroup):
     menu = State()
     editing = State()
     custom_time = State()
+    email = State()
+    phone = State()
 
 
 class TaskStates(StatesGroup):

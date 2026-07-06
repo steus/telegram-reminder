@@ -5,6 +5,7 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.db.models import InputMode, Member, Task, TaskStatus, Visibility
+from app.instance_config import load_instance_config
 
 # Статусы чек-ина (§6.4): callback_data = t:{task_id}:{status}, ≤64 байт
 CHECKIN_STATUS_BUTTONS: tuple[tuple[TaskStatus, str, str], ...] = (
@@ -211,15 +212,19 @@ def kb_ping(prefix: str = "ob:ping") -> InlineKeyboardMarkup:
 
 
 def kb_settings_menu() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Способ ввода задач", callback_data="st:ed:im")],
-            [InlineKeyboardButton(text="Видимость итога", callback_data="st:ed:vis")],
-            [InlineKeyboardButton(text="День чек-ина", callback_data="st:ed:wd")],
-            [InlineKeyboardButton(text="Время чек-ина", callback_data="st:ed:tm")],
-            [InlineKeyboardButton(text="Пинг в середине недели", callback_data="st:ed:ping")],
-        ]
-    )
+    cfg = load_instance_config()
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text="Способ ввода задач", callback_data="st:ed:im")],
+        [InlineKeyboardButton(text="Видимость итога", callback_data="st:ed:vis")],
+        [InlineKeyboardButton(text="День чек-ина", callback_data="st:ed:wd")],
+        [InlineKeyboardButton(text="Время чек-ина", callback_data="st:ed:tm")],
+        [InlineKeyboardButton(text="Пинг в середине недели", callback_data="st:ed:ping")],
+    ]
+    if cfg.onboarding.collect_email:
+        rows.append([InlineKeyboardButton(text="Email", callback_data="st:ed:email")])
+    if cfg.onboarding.collect_phone:
+        rows.append([InlineKeyboardButton(text="Телефон", callback_data="st:ed:phone")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def kb_settings_back() -> InlineKeyboardMarkup:
@@ -234,12 +239,18 @@ def format_member_settings(member: Member) -> str:
     wd = dict(WEEKDAYS).get(member.checkin_weekday, str(member.checkin_weekday))
     tm = member.checkin_time.strftime("%H:%M")
     ping = "да" if member.midweek_ping else "нет"
-    return (
-        f"• Способ ввода: {INPUT_MODE_LABELS[member.input_mode]}\n"
-        f"• Видимость итога: {VISIBILITY_LABELS[member.visibility]}\n"
-        f"• Чек-ин: {wd}, {tm} ({member.timezone})\n"
-        f"• Пинг в середине недели: {ping}"
-    )
+    cfg = load_instance_config()
+    lines = [
+        f"• Способ ввода: {INPUT_MODE_LABELS[member.input_mode]}",
+        f"• Видимость итога: {VISIBILITY_LABELS[member.visibility]}",
+        f"• Чек-ин: {wd}, {tm} ({member.timezone})",
+        f"• Пинг в середине недели: {ping}",
+    ]
+    if cfg.onboarding.collect_email:
+        lines.append(f"• Email: {member.email or 'не указан'}")
+    if cfg.onboarding.collect_phone:
+        lines.append(f"• Телефон: {member.phone or 'не указан'}")
+    return "\n".join(lines)
 
 
 def kb_membership_join_confirm(group_id: int) -> InlineKeyboardMarkup:

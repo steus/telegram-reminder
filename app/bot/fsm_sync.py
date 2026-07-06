@@ -11,6 +11,14 @@ from app.bot.states import OnboardingStates, SettingsStates
 
 async def sync_fsm_from_context(state: FSMContext, ctx: DialogContext) -> None:
     if ctx.settings_field:
+        contact_mapping = {
+            "email": SettingsStates.email,
+            "phone": SettingsStates.phone,
+        }
+        contact_state = contact_mapping.get(ctx.settings_field)
+        if contact_state is not None:
+            await state.set_state(contact_state)
+            return
         await state.set_state(SettingsStates.editing)
         return
     if not ctx.onboarded and ctx.step:

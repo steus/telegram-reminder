@@ -106,6 +106,14 @@ def settings_edit_prompt(field: str) -> tuple[str, InlineKeyboardMarkup | None]:
             kb.kb_time(prefix="st:tm", custom_cb="st:tm:custom"),
         ),
         "ping": ("Пинг в середине недели:", kb.kb_ping(prefix="st:ping")),
+        "email": (
+            "Напиши email одним сообщением, например: name@example.com",
+            kb.kb_settings_back(),
+        ),
+        "phone": (
+            "Напиши телефон, например: +7 900 123-45-67",
+            kb.kb_settings_back(),
+        ),
     }
     text, keyboard = mapping[field]
     return text, keyboard
