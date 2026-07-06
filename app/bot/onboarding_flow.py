@@ -26,10 +26,14 @@ def parse_phone(text: str) -> str | None:
         return None
     has_plus = raw.startswith("+")
     digits = "".join(ch for ch in raw if ch.isdigit())
-    if len(digits) < 10 or len(digits) > 15:
+    if len(digits) > 15:
         return None
     if has_plus:
+        if len(digits) < 8:
+            return None
         return f"+{digits}"
+    if len(digits) < 7:
+        return None
     return digits
 
 
@@ -76,7 +80,7 @@ def onboarding_prompt(step: str) -> tuple[str, InlineKeyboardMarkup | None]:
         ),
         "phone": (
             "И телефон — на случай, если в Telegram не дозвониться.\n"
-            "Можно с +372 или без, например: +372 51234567",
+            "Можно с +372 или без, например: +372 51234567 или 51234567",
             None,
         ),
         "weekday": (
@@ -111,7 +115,7 @@ def settings_edit_prompt(field: str) -> tuple[str, InlineKeyboardMarkup | None]:
             kb.kb_settings_back(),
         ),
         "phone": (
-            "Напиши телефон, например: +372 51234567",
+            "Напиши телефон, например: +372 51234567 или 51234567",
             kb.kb_settings_back(),
         ),
     }

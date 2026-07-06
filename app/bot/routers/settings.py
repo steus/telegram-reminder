@@ -204,7 +204,7 @@ async def msg_settings_phone(message: Message, state: FSMContext) -> None:
     phone = parse_phone(message.text)
     if phone is None:
         await message.answer(
-            "Не получилось разобрать номер. Попробуй ещё раз, например: +372 51234567"
+            "Не получилось разобрать номер. Попробуй ещё раз, например: +372 51234567 или 51234567"
         )
         return
     await _save_contact_setting(message, state, phone=phone)

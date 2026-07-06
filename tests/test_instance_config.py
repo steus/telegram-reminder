@@ -72,6 +72,8 @@ def test_parse_email() -> None:
 def test_parse_phone() -> None:
     assert parse_phone("+372 51234567") == "+37251234567"
     assert parse_phone("89001234567") == "89001234567"
+    assert parse_phone("51234567") == "51234567"
+    assert parse_phone("123456") is None
     assert parse_phone("123") is None
 
 
