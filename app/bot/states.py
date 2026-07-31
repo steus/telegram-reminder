@@ -33,6 +33,7 @@ class TaskStates(StatesGroup):
 class FacilitatorStates(StatesGroup):
     pasting_transcript = State()
     confirm_resend = State()
+    assigning_section = State()
 
 
 class MembershipStates(StatesGroup):

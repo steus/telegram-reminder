@@ -56,8 +56,10 @@
 - **После этапа 4:** `app/llm/` — `ask_llm` + фолбэк (тест `tests/test_llm_fallback.py`).
   Plaud: `app/services/plaud.py` (API-каркас → scrape → ручная вставка). Транскрипт
   хранится в `week.transcript_text`; ведущий — `/set_plaud_url`, `/paste_transcript`,
-  `/paste_done`, one-shot @-секции. Парсер «План действий»: `plaud_action_plan.py`
-  (без LLM). Несколько ведущих: `group_facilitator`. Auto-поток:
+  `/paste_done`, one-shot @-секции. Парсер @-секций: `plaud_action_plan.py`
+  (без LLM; ZWSP/＠; транслит кир↔лат без whitelist имён; title не обязателен;
+  ручное назначение несматченных: `fc:asg:*`). Несколько ведущих: `group_facilitator`.
+  Auto-поток:
   `app/services/auto_goal_setup.py`. Docker: `UID`/`GID` в `.env` для SQLite.
   Миграции `a1b2c3d4e5f6`, `b2c3d4e5f6a7`.
 - **После этапа 5:** `app/services/voice.py` — whisper local/api, лимит

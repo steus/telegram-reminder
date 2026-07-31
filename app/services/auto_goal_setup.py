@@ -31,6 +31,8 @@ from app.services.extraction import (
 from app.services.plaud import PlaudManualRequired, fetch_transcript
 from app.services.plaud_action_plan import (
     count_action_plan_sections,
+    extract_tasks_for_header,
+    list_unmatched_action_plan_headers,
     member_has_action_plan_section,
 )
 
@@ -52,6 +54,7 @@ REASON_NO_MEMBER_MATCH = "нет участника с таким именем �
 class AutoExtractionResult:
     sent_with_goals: list[str] = field(default_factory=list)
     without_goals: list[tuple[str, str]] = field(default_factory=list)
+    unmatched_headers: list[str] = field(default_factory=list)
     no_auto_members: bool = False
 
 
@@ -77,6 +80,11 @@ def format_facilitator_report(result: AutoExtractionResult, *, saved_only: bool 
             lines.append(f"  • {name} — {reason}")
     elif not result.no_auto_members and not result.sent_with_goals:
         lines.append("Никому не отправлено — проверь онбординг участников.")
+    if result.unmatched_headers:
+        lines.append("Не сопоставлены с участниками группы:")
+        for header in result.unmatched_headers:
+            lines.append(f"  • @{header}")
+        lines.append("Можно назначить вручную кнопками ниже.")
     return "\n".join(lines)
 
 
@@ -211,12 +219,19 @@ async def run_auto_extraction_for_group(
     result = AutoExtractionResult(
         no_auto_members=not members and not from_facilitator_paste
     )
+    transcript = (week.transcript_text or "").strip()
+    plan_source = pasted_text if from_facilitator_paste else transcript
+    all_active = await list_active_members_for_group(session, group_id)
+    if plan_source and plan_source.strip():
+        result.unmatched_headers = list_unmatched_action_plan_headers(
+            plan_source,
+            [m.full_name for m in all_active],
+        )
 
     if from_facilitator_paste and not members:
-        result.without_goals.append(("@-секция из вставки", REASON_NO_MEMBER_MATCH))
+        if not result.unmatched_headers:
+            result.without_goals.append(("@-секция из вставки", REASON_NO_MEMBER_MATCH))
         return result
-
-    transcript = (week.transcript_text or "").strip()
 
     for member in members:
         dialog = await get_or_create_dialog_state(session, member.id)
@@ -276,3 +291,41 @@ async def send_scheduled_auto_goal_setup(bot: Bot, member: Member) -> bool:
 
         await _notify_member(bot, session, member_row, week, reason or "")
         return reason in ("goals_found", "no_goals")
+
+
+async def assign_plan_section_to_member(
+    session: AsyncSession,
+    bot: Bot,
+    *,
+    group_id: int,
+    member_id: int,
+    header: str,
+) -> tuple[bool, str]:
+    """Назначить задачи @-секции участнику и отправить экран подтверждения."""
+    member = await get_member_by_id(session, member_id)
+    if member is None or not member.is_active or member.group_id != group_id:
+        return False, "Участник не найден или неактивен."
+
+    dialog = await get_or_create_dialog_state(session, member.id)
+    ctx = DialogContext.from_json(dialog.context_json)
+    if not ctx.onboarded:
+        return False, f"{member.full_name} ещё не завершил онбординг."
+
+    week = await get_or_create_current_week(session, group_id)
+    transcript = (week.transcript_text or "").strip()
+    texts = extract_tasks_for_header(transcript, header)
+    if not texts:
+        return False, f"В транскрипте нет задач для @{header}."
+
+    week_id = await start_auto_goal_confirmation(session, member)
+    await replace_tasks(
+        session,
+        member_id=member.id,
+        week_id=week_id,
+        texts=texts,
+        source=TaskSource.plaud,
+    )
+    ctx.show_task_confirmation()
+    await update_dialog_context(session, member.id, ctx.to_json())
+    await _notify_member(bot, session, member, week, "goals_found")
+    return True, member.full_name

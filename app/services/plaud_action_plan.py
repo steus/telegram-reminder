@@ -1,60 +1,193 @@
-"""Разбор структурированного блока «План действий» из экспорта Plaud."""
+"""Разбор структурированного блока с @-секциями из экспорта Plaud.
+
+Имена участников не хардкодятся: матч по токенам + транслит кириллица↔латиница.
+Заголовок вроде «План действий» не обязателен — достаточно строк `@Имя`.
+"""
 
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 
-# Латиница ↔ кириллица для частичного совпадения имён в @-заголовках
-_NAME_ALIASES: dict[str, list[str]] = {
-    "stepan": ["stepan", "степан"],
-    "степан": ["stepan", "степан"],
-    "maya": ["maya", "майя", "maia"],
-    "майя": ["maya", "майя", "maia"],
-    "denis": ["denis", "денис"],
-    "денис": ["denis", "денис"],
-    "marina": ["marina", "марина"],
-    "марина": ["marina", "марина"],
-}
-
-_PLAN_TITLE_RE = re.compile(r"план\s+действий", re.IGNORECASE)
 _SECTION_HEADER_RE = re.compile(r"^@(.+)$")
 _TASK_LINE_RE = re.compile(r"^[-•]\s+(.+)$")
 _TBD_SUFFIX_RE = re.compile(r"\s*-\s*\[TBD\]\s*$", re.IGNORECASE)
 _SPEAKER_ONLY_RE = re.compile(r"^(?:speaker|спикер)\s*\d+\s*$", re.IGNORECASE)
-
+_CAMEL_RE = re.compile(
+    r"[A-ZА-ЯЁ][a-zа-яё]+|[a-zа-яё]+|[A-ZА-ЯЁ]+(?![a-zа-яё])|\d+",
+    re.UNICODE,
+)
+# ZWSP/BOM и др. из Docs/Plaud ломают ^@-заголовки
+_INVISIBLE_RE = re.compile(r"[\u200b\u200c\u200d\u200e\u200f\u2060\ufeff\u00ad]")
 
 _STOPWORDS = frozenset({"speaker", "спикер"})
 
+# Общий транслит (не список участников). Многосимвольные замены — сначала.
+_CYR_TO_LAT_MULTI = (
+    ("щ", "sch"),
+    ("ш", "sh"),
+    ("ч", "ch"),
+    ("ж", "zh"),
+    ("ц", "ts"),
+    ("ю", "yu"),
+    ("я", "ya"),
+    ("ё", "yo"),
+)
+_CYR_TO_LAT_SINGLE = {
+    "а": "a",
+    "б": "b",
+    "в": "v",
+    "г": "g",
+    "д": "d",
+    "е": "e",
+    "з": "z",
+    "и": "i",
+    "й": "y",
+    "к": "k",
+    "л": "l",
+    "м": "m",
+    "н": "n",
+    "о": "o",
+    "п": "p",
+    "р": "r",
+    "с": "s",
+    "т": "t",
+    "у": "u",
+    "ф": "f",
+    "х": "h",
+    "ъ": "",
+    "ы": "y",
+    "ь": "",
+    "э": "e",
+}
+_LAT_TO_CYR_MULTI = (
+    ("sch", "щ"),
+    ("sh", "ш"),
+    ("ch", "ч"),
+    ("zh", "ж"),
+    ("ts", "ц"),
+    ("yu", "ю"),
+    ("ya", "я"),
+    ("yo", "ё"),
+)
+_LAT_TO_CYR_SINGLE = {
+    "a": "а",
+    "b": "б",
+    "c": "к",
+    "d": "д",
+    "e": "е",
+    "f": "ф",
+    "g": "г",
+    "h": "х",
+    "i": "и",
+    "j": "й",
+    "k": "к",
+    "l": "л",
+    "m": "м",
+    "n": "н",
+    "o": "о",
+    "p": "п",
+    "q": "к",
+    "r": "р",
+    "s": "с",
+    "t": "т",
+    "u": "у",
+    "v": "в",
+    "w": "в",
+    "x": "кс",
+    "y": "й",
+    "z": "з",
+}
 
-def _aliases_for_name(full_name: str) -> set[str]:
-    tokens = full_name.lower().split()
-    aliases: set[str] = set()
-    for token in tokens:
-        if len(token) < 2 or token in _STOPWORDS:
+
+def _normalize_line(raw: str) -> str:
+    line = _INVISIBLE_RE.sub("", raw)
+    line = line.replace("\uff20", "@")  # fullwidth ＠
+    return line.strip()
+
+
+def _normalize_transcript(transcript: str) -> str:
+    return "\n".join(_normalize_line(line) for line in transcript.splitlines())
+
+
+def _has_cyrillic(text: str) -> bool:
+    return bool(re.search(r"[а-яё]", text, re.IGNORECASE))
+
+
+def _has_latin(text: str) -> bool:
+    return bool(re.search(r"[a-z]", text, re.IGNORECASE))
+
+
+def _cyr_to_lat(text: str) -> str:
+    out = text.lower()
+    for src, dst in _CYR_TO_LAT_MULTI:
+        out = out.replace(src, dst)
+    return "".join(_CYR_TO_LAT_SINGLE.get(ch, ch) for ch in out)
+
+
+def _lat_to_cyr(text: str) -> str:
+    out = text.lower()
+    for src, dst in _LAT_TO_CYR_MULTI:
+        out = out.replace(src, dst)
+    return "".join(_LAT_TO_CYR_SINGLE.get(ch, ch) for ch in out)
+
+
+def _script_variants(token: str) -> set[str]:
+    """Токен + транслит в другую письменность (любые имена, без whitelist)."""
+    variants = {token}
+    if _has_cyrillic(token):
+        variants.add(_cyr_to_lat(token))
+    if _has_latin(token):
+        variants.add(_lat_to_cyr(token))
+    return {v for v in variants if len(v) >= 2}
+
+
+def _tokenize(text: str) -> set[str]:
+    """Токены имени/хэндла: пробелы, _, CamelCase → stepan + teus из StepanTeus."""
+    tokens: set[str] = set()
+    for chunk in re.split(r"[\s_\-()/]+", text.strip()):
+        if not chunk:
             continue
-        aliases.add(token)
-        aliases.update(_NAME_ALIASES.get(token, []))
-    return aliases
+        parts = _CAMEL_RE.findall(chunk) or [chunk]
+        for part in parts:
+            pl = part.lower()
+            if len(pl) >= 2 and pl not in _STOPWORDS:
+                tokens.update(_script_variants(pl))
+        whole = re.sub(r"[^\w]", "", chunk, flags=re.UNICODE).lower()
+        if len(whole) >= 2 and whole not in _STOPWORDS:
+            tokens.update(_script_variants(whole))
+    return tokens
+
+
+def _tokens_overlap(a: set[str], b: set[str]) -> bool:
+    """Совпадение токенов или префикс (denis ⊂ denisskud)."""
+    if a & b:
+        return True
+    for left in a:
+        if len(left) < 3:
+            continue
+        for right in b:
+            if len(right) < 3:
+                continue
+            if left in right or right in left:
+                return True
+    return False
 
 
 def _header_matches_member(header: str, full_name: str) -> bool:
     """Сопоставить @-заголовок Plaud с full_name участника."""
-    h = header.strip().lower()
-    fn = full_name.strip().lower()
+    h = header.strip()
+    fn = full_name.strip()
 
-    speaker_member = re.fullmatch(r"(?:speaker|спикер)\s*(\d+)", fn)
+    speaker_member = re.fullmatch(r"(?:speaker|спикер)\s*(\d+)", fn, re.IGNORECASE)
     if speaker_member:
         num = speaker_member.group(1)
-        return bool(re.search(rf"(?:speaker|спикер)\s*{num}\b", h))
+        return bool(re.search(rf"(?:speaker|спикер)\s*{num}\b", h, re.IGNORECASE))
 
     if _SPEAKER_ONLY_RE.match(h):
         return False
 
-    aliases = _aliases_for_name(full_name)
-    for alias in aliases:
-        if len(alias) >= 3 and alias in h:
-            return True
-    return False
+    return _tokens_overlap(_tokenize(fn), _tokenize(h))
 
 
 def _clean_task_line(line: str) -> str:
@@ -68,7 +201,7 @@ def _parse_sections(plan_body: str) -> list[tuple[str, list[str]]]:
     current_tasks: list[str] = []
 
     for raw_line in plan_body.splitlines():
-        line = raw_line.strip()
+        line = _normalize_line(raw_line)
         if not line:
             continue
 
@@ -76,7 +209,7 @@ def _parse_sections(plan_body: str) -> list[tuple[str, list[str]]]:
         if header_match:
             if current_header is not None:
                 sections.append((current_header, current_tasks))
-            current_header = header_match.group(1).strip()
+            current_header = _normalize_line(header_match.group(1))
             current_tasks = []
             continue
 
@@ -86,7 +219,9 @@ def _parse_sections(plan_body: str) -> list[tuple[str, list[str]]]:
         task_match = _TASK_LINE_RE.match(line)
         if task_match:
             task = _clean_task_line(task_match.group(1))
-        elif _TBD_SUFFIX_RE.search(line) or (len(line) > 8 and not line.startswith("#")):
+        elif _TBD_SUFFIX_RE.search(line) or (
+            len(line) >= 3 and not line.startswith("#") and not line.startswith("@")
+        ):
             task = _clean_task_line(line)
         else:
             continue
@@ -100,19 +235,14 @@ def _parse_sections(plan_body: str) -> list[tuple[str, list[str]]]:
 
 
 def _find_plan_body(transcript: str) -> str | None:
-    """Тело плана: после «План действий» или с первого @-заголовка."""
-    title = _PLAN_TITLE_RE.search(transcript)
-    if title is not None:
-        body = transcript[title.start() :]
-        if _parse_sections(body):
-            return body
-
-    first_at = re.search(r"^@(\S.+)$", transcript, re.MULTILINE)
-    if first_at is not None:
-        body = transcript[first_at.start() :]
-        if _parse_sections(body):
-            return body
-
+    """Тело плана — с первого @-заголовка (отдельный title не нужен)."""
+    normalized = _normalize_transcript(transcript)
+    first_at = re.search(r"^@(\S.+)$", normalized, re.MULTILINE)
+    if first_at is None:
+        return None
+    body = normalized[first_at.start() :]
+    if _parse_sections(body):
+        return body
     return None
 
 
@@ -121,45 +251,71 @@ def has_action_plan_markers(transcript: str) -> bool:
 
 
 def count_action_plan_sections(transcript: str) -> int:
-    """Число @-секций в блоке «План действий»."""
+    """Число @-секций в плане."""
     plan_body = _find_plan_body(transcript)
     if plan_body is None:
         return 0
     return len(_parse_sections(plan_body))
 
 
+def list_action_plan_sections(transcript: str) -> list[tuple[str, list[str]]]:
+    """Все @-секции: (заголовок без @, список задач)."""
+    plan_body = _find_plan_body(transcript)
+    if plan_body is None:
+        return []
+    return _parse_sections(plan_body)
+
+
+def extract_tasks_for_header(transcript: str, header: str) -> list[str]:
+    """Задачи секции по @-заголовку (точное или токен-совпадение)."""
+    for section_header, tasks in list_action_plan_sections(transcript):
+        if section_header.strip().lower() == header.strip().lower():
+            return list(tasks)
+        if _headers_refer_to_same_person(section_header, header):
+            return list(tasks)
+    return []
+
+
+def list_unmatched_action_plan_headers(
+    transcript: str, member_names: Iterable[str]
+) -> list[str]:
+    """@-заголовки, которым не нашлось участника в группе."""
+    names = [n for n in member_names if n and n.strip()]
+    unmatched: list[str] = []
+    for header, _ in list_action_plan_sections(transcript):
+        if not any(_header_matches_member(header, name) for name in names):
+            unmatched.append(header)
+    return unmatched
+
+
 def _headers_refer_to_same_person(header_a: str, header_b: str) -> bool:
     """Считаем @Deniss и @Denis одной секцией (частичное совпадение токенов)."""
-    a = header_a.strip().lower()
-    b = header_b.strip().lower()
-    if a == b:
+    if header_a.strip().lower() == header_b.strip().lower():
         return True
-    for token in re.findall(r"\w+", a):
-        if len(token) >= 3 and token in b:
-            return True
-    for token in re.findall(r"\w+", b):
-        if len(token) >= 3 and token in a:
-            return True
-    return False
+    return _tokens_overlap(_tokenize(header_a), _tokenize(header_b))
 
 
 def _format_action_plan_section(header: str, tasks: list[str]) -> str:
     lines = [f"@{header}", ""]
-    lines.extend(tasks)
+    for task in tasks:
+        if task.startswith(("-", "•")):
+            lines.append(task)
+        else:
+            lines.append(f"- {task}")
     return "\n".join(lines)
 
 
 def merge_action_plan_transcripts(existing: str | None, new_text: str) -> str:
     """Добавить или обновить @-секции в сохранённом транскрипте недели."""
-    new_body = _find_plan_body(new_text) or new_text.strip()
+    new_body = _find_plan_body(new_text) or _normalize_transcript(new_text).strip()
     new_sections = _parse_sections(new_body)
     if not new_sections:
         return (existing or "").strip() or new_text.strip()
 
     if not existing or not existing.strip():
-        return new_text.strip()
+        return _normalize_transcript(new_text).strip() or new_text.strip()
 
-    existing_body = _find_plan_body(existing) or existing.strip()
+    existing_body = _find_plan_body(existing) or _normalize_transcript(existing).strip()
     merged: list[tuple[str, list[str]]] = list(_parse_sections(existing_body))
 
     for new_header, new_tasks in new_sections:
@@ -177,10 +333,7 @@ def merge_action_plan_transcripts(existing: str | None, new_text: str) -> str:
 
 def member_has_action_plan_section(transcript: str, full_name: str) -> bool:
     """Есть ли в транскрипте @-секция для участника."""
-    plan_body = _find_plan_body(transcript)
-    if plan_body is None:
-        return False
-    for header, _ in _parse_sections(plan_body):
+    for header, _ in list_action_plan_sections(transcript):
         if _header_matches_member(header, full_name):
             return True
     return False
@@ -189,16 +342,12 @@ def member_has_action_plan_section(transcript: str, full_name: str) -> bool:
 def extract_tasks_from_action_plan(
     transcript: str, full_name: str
 ) -> list[str] | None:
-    """Задачи участника из блока «План действий» (@Speaker / @Имя).
+    """Задачи участника из @-секций плана.
 
     None — блока нет, вызывающий код может использовать LLM.
     list (в т.ч. пустой) — блок найден, задачи только из своей секции.
     """
-    plan_body = _find_plan_body(transcript)
-    if plan_body is None:
-        return None
-
-    sections = _parse_sections(plan_body)
+    sections = list_action_plan_sections(transcript)
     if not sections:
         return None
 

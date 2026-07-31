@@ -3,6 +3,7 @@
 from app.services.plaud_action_plan import (
     count_action_plan_sections,
     extract_tasks_from_action_plan,
+    list_unmatched_action_plan_headers,
     member_has_action_plan_section,
     merge_action_plan_transcripts,
 )
@@ -126,3 +127,91 @@ def test_merge_action_plan_updates_existing_section() -> None:
     merged = merge_action_plan_transcripts(existing, updated)
     tasks = extract_tasks_from_action_plan(merged, "Denis")
     assert tasks == ["New task", "Another task"]
+
+
+MARINA_PLAN = """План дейсвий
+@Denisskud
+-  Провести созвон со Speaker 2 для завершения разработки и тестирования бота
+-  Опубликовать написанную статью в LinkedIn
+-  Проверить составленный Мариной текст вакансии ассистента и дать обратную связь
+@StepanTeus
+-  Провести созвон со Deniss Kudrjashov для завершения разработки и тестирования бота
+-  Протестировать готового бота
+-  Проверить составленный Мариной текст вакансии ассистента и дать обратную связь
+-  Попробовать связаться с «полутеплым» клиентом по поводу небольшого проекта
+@Marina_Bussines
+-  Выбрать кандидата на позицию ассистента и выдать ему тестовое задание сроком на одну неделю
+-  Разместить объявление о найме ассистента на CV Keskus и в профильных Facebook-группах
+-  Простроить воронку и отснять контент до 14 августа, завершив работу до 2 августа
+-  Подготовить и провести краткую самопрезентацию на встрече с предпринимателями, используя утвержденную формулировку
+@MayaMich
+-  Провести повторные переговоры с Ирой по выбору места для мастер-класса по коммуникациям (квартал Вольта или «Русалка»)
+-  Анонсировать курс по лидерскому PCM на мастер-классе 30 июля и предложить запись
+"""
+
+
+def test_marina_plan_splits_four_sections() -> None:
+    assert count_action_plan_sections(MARINA_PLAN) == 4
+    assert len(extract_tasks_from_action_plan(MARINA_PLAN, "Denis") or []) == 3
+    assert len(extract_tasks_from_action_plan(MARINA_PLAN, "Stepan Teus") or []) == 4
+    assert len(extract_tasks_from_action_plan(MARINA_PLAN, "Marina") or []) == 4
+    assert len(extract_tasks_from_action_plan(MARINA_PLAN, "Maya Mich") or []) == 2
+    assert not any(
+        "LinkedIn" in t
+        for t in (extract_tasks_from_action_plan(MARINA_PLAN, "Stepan Teus") or [])
+    )
+
+
+def test_zwsp_before_headers_does_not_collapse_sections() -> None:
+    broken = (
+        "План действий\n"
+        "@Denisskud\n-  D1\n-  D2\n-  D3\n"
+        "\u200b@StepanTeus\n-  S1\n-  S2\n-  S3\n-  S4\n"
+        "\ufeff@Marina_Bussines\n-  M1\n-  M2\n"
+        "\u200e@MayaMich\n-  Y1\n-  Y2\n"
+    )
+    assert count_action_plan_sections(broken) == 4
+    assert extract_tasks_from_action_plan(broken, "Denis") == ["D1", "D2", "D3"]
+    assert extract_tasks_from_action_plan(broken, "Stepan Teus") == [
+        "S1",
+        "S2",
+        "S3",
+        "S4",
+    ]
+
+
+def test_fullwidth_at_is_normalized() -> None:
+    text = "＠StepanTeus\n-  Task one\n"
+    assert extract_tasks_from_action_plan(text, "Stepan") == ["Task one"]
+
+
+def test_list_unmatched_headers() -> None:
+    unmatched = list_unmatched_action_plan_headers(
+        MARINA_PLAN, ["Stepan Teus", "Marina"]
+    )
+    assert "Denisskud" in unmatched
+    assert "MayaMich" in unmatched
+    assert "StepanTeus" not in unmatched
+    assert "Marina_Bussines" not in unmatched
+
+
+def test_no_title_needed_only_at_headers() -> None:
+    text = "@Alexey\n- First task\n\n@Ольга\n- Second task\n"
+    assert count_action_plan_sections(text) == 2
+    assert extract_tasks_from_action_plan(text, "Alexey") == ["First task"]
+    assert extract_tasks_from_action_plan(text, "Ольга") == ["Second task"]
+
+
+def test_translit_matches_without_name_whitelist() -> None:
+    """Кириллица↔латиница через транслит, не через список имён группы."""
+    text = "@NikitaVolkov\n- Ship the release\n"
+    assert extract_tasks_from_action_plan(text, "Никита Волков") == ["Ship the release"]
+    assert member_has_action_plan_section(text, "Никита")
+
+
+def test_extract_tasks_for_header() -> None:
+    from app.services.plaud_action_plan import extract_tasks_for_header
+
+    tasks = extract_tasks_for_header(MARINA_PLAN, "StepanTeus")
+    assert len(tasks) == 4
+    assert "Протестировать готового бота" in tasks

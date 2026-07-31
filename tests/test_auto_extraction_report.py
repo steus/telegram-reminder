@@ -37,3 +37,15 @@ def test_format_facilitator_report_not_onboarded() -> None:
     text = format_facilitator_report(result)
     assert "Ivan" in text
     assert REASON_NOT_ONBOARDED in text
+
+
+def test_format_facilitator_report_unmatched_headers() -> None:
+    result = AutoExtractionResult(
+        sent_with_goals=["Stepan Teus"],
+        unmatched_headers=["Denisskud", "MayaMich"],
+    )
+    text = format_facilitator_report(result)
+    assert "@Denisskud" in text
+    assert "@MayaMich" in text
+    assert "Не сопоставлены" in text
+    assert "кнопками" in text

@@ -433,6 +433,44 @@ def kb_group_transcript_submenu() -> InlineKeyboardMarkup:
     )
 
 
+def kb_assign_unmatched_headers(headers: list[str]) -> InlineKeyboardMarkup:
+    """Кнопки несматченных @-секций (индекс в callback, ≤64 байт)."""
+    rows: list[list[InlineKeyboardButton]] = []
+    for idx, header in enumerate(headers[:20]):
+        label = f"@{header}"
+        if len(label) > 40:
+            label = label[:37] + "…"
+        rows.append(
+            [InlineKeyboardButton(text=label, callback_data=f"fc:asg:h:{idx}")]
+        )
+    rows.append(
+        [InlineKeyboardButton(text="Не назначать", callback_data="fc:asg:x")]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def kb_assign_pick_member(
+    members: list[Member], *, header_idx: int
+) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for member in members[:30]:
+        name = member.full_name
+        if len(name) > 40:
+            name = name[:37] + "…"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=name,
+                    callback_data=f"fc:asg:p:{header_idx}:{member.id}",
+                )
+            ]
+        )
+    rows.append(
+        [InlineKeyboardButton(text="← К @-секциям", callback_data="fc:asg:back")]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def kb_group_members(
     members: list[Member], facilitator_chat_ids: set[str]
 ) -> InlineKeyboardMarkup:

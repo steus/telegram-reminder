@@ -33,6 +33,7 @@ from app.db.repo import (
     get_member_by_chat_id,
     get_or_create_current_week,
     get_or_create_dialog_state,
+    list_active_members_for_group,
     update_dialog_context,
     update_week_plaud_url,
     update_week_transcript,
@@ -41,6 +42,7 @@ from app.services.group_goals_view import build_group_goals_report
 from app.db.session import get_session
 from app.services.auto_goal_setup import (
     AutoExtractionResult,
+    assign_plan_section_to_member,
     format_facilitator_report,
     run_auto_extraction_for_group,
     should_confirm_resend,
@@ -159,14 +161,15 @@ async def _finalize_transcript(
     text = text.strip()
     if len(text) < 20:
         await message.answer(
-            "Текст слишком короткий. Пришли блок «План действий» с @-заголовками."
+            "Текст слишком короткий. Пришли блок с @-заголовками "
+            "(например @Имя и список задач)."
         )
         return
 
     if not has_action_plan_markers(text):
         await message.answer(
-            "В тексте нет @-заголовков (например @Степан). "
-            "Пришли блок «План действий» целиком или добавь части и /paste_done."
+            "В тексте нет @-заголовков (например @Имя на отдельной строке). "
+            "Пришли секции целиком или добавь части и /paste_done."
         )
         return
 
@@ -219,7 +222,30 @@ async def _finalize_transcript(
         return
 
     await _clear_paste_context(message.chat.id, state, ctx, member_id)
-    await message.answer(format_facilitator_report(result))
+    await _send_extraction_report(message, state, group_id=group_id, result=result)
+
+
+async def _send_extraction_report(
+    message: Message,
+    state: FSMContext,
+    *,
+    group_id: int,
+    result: AutoExtractionResult,
+) -> None:
+    text = format_facilitator_report(result)
+    if not result.unmatched_headers:
+        await message.answer(text)
+        return
+
+    await state.set_state(FacilitatorStates.assigning_section)
+    await state.update_data(
+        facilitator_group_id=group_id,
+        assign_headers=list(result.unmatched_headers),
+    )
+    await message.answer(
+        text,
+        reply_markup=kb.kb_assign_unmatched_headers(result.unmatched_headers),
+    )
 
 
 class FacilitatorText(BaseFilter):
@@ -677,7 +703,9 @@ async def cb_facilitator_resend_yes(callback: CallbackQuery, state: FSMContext) 
     await state.clear()
     await callback.answer()
     await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.message.answer(format_facilitator_report(result))
+    await _send_extraction_report(
+        callback.message, state, group_id=group_id, result=result
+    )
 
 
 @router.callback_query(F.data == "fc:save")
@@ -689,3 +717,113 @@ async def cb_facilitator_resend_no(callback: CallbackQuery, state: FSMContext) -
     await callback.answer()
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(format_facilitator_report(AutoExtractionResult(), saved_only=True))
+
+
+@router.callback_query(F.data == "fc:asg:x")
+async def cb_assign_skip(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        return
+    await state.clear()
+    await callback.answer()
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer("Ок, без ручного назначения.")
+
+
+@router.callback_query(F.data == "fc:asg:back")
+async def cb_assign_back_to_headers(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        return
+    data = await state.get_data()
+    headers = data.get("assign_headers") or []
+    if not headers:
+        await callback.answer("Список секций пуст — вставь план заново.", show_alert=True)
+        return
+    await state.set_state(FacilitatorStates.assigning_section)
+    await callback.answer()
+    await callback.message.edit_text(
+        "Кому назначить несопоставленные секции?",
+        reply_markup=kb.kb_assign_unmatched_headers(headers),
+    )
+
+
+@router.callback_query(F.data.startswith("fc:asg:h:"))
+async def cb_assign_pick_header(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None or callback.data is None:
+        return
+    data = await state.get_data()
+    group_id = data.get("facilitator_group_id")
+    headers: list[str] = list(data.get("assign_headers") or [])
+    try:
+        idx = int(callback.data.removeprefix("fc:asg:h:"))
+        header = headers[idx]
+    except (ValueError, IndexError):
+        await callback.answer("Секция устарела — вставь план ещё раз.", show_alert=True)
+        return
+    if group_id is None:
+        await callback.answer("Сессия истекла.", show_alert=True)
+        return
+
+    async with get_session() as session:
+        members = await list_active_members_for_group(session, group_id)
+
+    if not members:
+        await callback.answer("В группе нет активных участников.", show_alert=True)
+        return
+
+    await state.update_data(assign_header_idx=idx)
+    await callback.answer()
+    await callback.message.edit_text(
+        f"Кому назначить задачи из @{header}?",
+        reply_markup=kb.kb_assign_pick_member(members, header_idx=idx),
+    )
+
+
+@router.callback_query(F.data.startswith("fc:asg:p:"))
+async def cb_assign_to_member(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None or callback.data is None:
+        return
+    data = await state.get_data()
+    group_id = data.get("facilitator_group_id")
+    headers: list[str] = list(data.get("assign_headers") or [])
+    parts = callback.data.removeprefix("fc:asg:p:").split(":")
+    if len(parts) != 2 or group_id is None:
+        await callback.answer("Сессия истекла.", show_alert=True)
+        return
+    try:
+        header_idx = int(parts[0])
+        member_id = int(parts[1])
+        header = headers[header_idx]
+    except (ValueError, IndexError):
+        await callback.answer("Секция устарела — вставь план ещё раз.", show_alert=True)
+        return
+
+    async with get_session() as session:
+        ok, detail = await assign_plan_section_to_member(
+            session,
+            callback.bot,
+            group_id=group_id,
+            member_id=member_id,
+            header=header,
+        )
+        remaining = (
+            [h for i, h in enumerate(headers) if i != header_idx] if ok else headers
+        )
+        if ok:
+            await state.update_data(assign_headers=remaining)
+
+    await callback.answer()
+    if not ok:
+        await callback.message.answer(f"Не вышло: {detail}")
+        return
+
+    if remaining:
+        await state.set_state(FacilitatorStates.assigning_section)
+        await callback.message.edit_text(
+            f"Готово: @{header} → {detail}.\n\nОстались несопоставленные:",
+            reply_markup=kb.kb_assign_unmatched_headers(remaining),
+        )
+    else:
+        await state.clear()
+        await callback.message.edit_text(
+            f"Готово: @{header} → {detail}.\nВсе секции разобраны."
+        )
