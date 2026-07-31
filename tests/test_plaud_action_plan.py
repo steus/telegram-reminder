@@ -215,3 +215,14 @@ def test_extract_tasks_for_header() -> None:
     tasks = extract_tasks_for_header(MARINA_PLAN, "StepanTeus")
     assert len(tasks) == 4
     assert "Протестировать готового бота" in tasks
+
+
+def test_rebind_section_removes_from_unmatched() -> None:
+    from app.services.plaud_action_plan import rebind_action_plan_section
+
+    text = "@MayaMich\n- Task A\n- Task B\n"
+    rebound = rebind_action_plan_section(text, header="MayaMich", member_name="Maia")
+    assert member_has_action_plan_section(rebound, "Maia")
+    assert extract_tasks_from_action_plan(rebound, "Maia") == ["Task A", "Task B"]
+    assert list_unmatched_action_plan_headers(rebound, ["Maia", "Stepan"]) == []
+    assert "MayaMich" not in rebound

@@ -21,6 +21,7 @@ from app.db.repo import (
     list_tasks_for_member_week,
     replace_tasks,
     update_dialog_context,
+    update_week_transcript,
 )
 from app.db.session import get_session
 from app.services.extraction import (
@@ -34,6 +35,7 @@ from app.services.plaud_action_plan import (
     extract_tasks_for_header,
     list_unmatched_action_plan_headers,
     member_has_action_plan_section,
+    rebind_action_plan_section,
 )
 
 logger = logging.getLogger(__name__)
@@ -325,6 +327,12 @@ async def assign_plan_section_to_member(
         texts=texts,
         source=TaskSource.plaud,
     )
+    rebound = rebind_action_plan_section(
+        transcript, header=header, member_name=member.full_name
+    )
+    if rebound != transcript:
+        await update_week_transcript(session, week.id, rebound)
+        week.transcript_text = rebound
     ctx.show_task_confirmation()
     await update_dialog_context(session, member.id, ctx.to_json())
     await _notify_member(bot, session, member, week, "goals_found")

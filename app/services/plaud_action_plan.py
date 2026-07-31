@@ -276,6 +276,51 @@ def extract_tasks_for_header(transcript: str, header: str) -> list[str]:
     return []
 
 
+def rebind_action_plan_section(
+    transcript: str, *, header: str, member_name: str
+) -> str:
+    """После ручного назначения: переименовать @-секцию под full_name участника.
+
+    Иначе @MayaMich останется «несматченной», хотя задачи уже у Maia.
+    """
+    plan_body = _find_plan_body(transcript)
+    if plan_body is None:
+        return transcript
+
+    sections = list(_parse_sections(plan_body))
+    source_idx = next(
+        (
+            i
+            for i, (h, _) in enumerate(sections)
+            if h.strip().lower() == header.strip().lower()
+            or _headers_refer_to_same_person(h, header)
+        ),
+        None,
+    )
+    if source_idx is None:
+        return transcript
+
+    _, source_tasks = sections[source_idx]
+    target_idx = next(
+        (
+            i
+            for i, (h, _) in enumerate(sections)
+            if i != source_idx and _header_matches_member(h, member_name)
+        ),
+        None,
+    )
+
+    if target_idx is not None:
+        sections[target_idx] = (member_name.strip(), source_tasks)
+        sections.pop(source_idx)
+    else:
+        sections[source_idx] = (member_name.strip(), source_tasks)
+
+    return "\n\n".join(
+        _format_action_plan_section(h, t) for h, t in sections
+    ).strip()
+
+
 def list_unmatched_action_plan_headers(
     transcript: str, member_names: Iterable[str]
 ) -> list[str]:
