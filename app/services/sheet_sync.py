@@ -15,7 +15,11 @@ from app.db.repo import (
     list_active_members_for_group,
     list_tasks_for_member_week,
 )
-from app.services.sheets import spreadsheet_edit_url, upsert_member_progress
+from app.services.sheets import (
+    sheets_credentials_problem,
+    spreadsheet_edit_url,
+    upsert_member_progress,
+)
 
 
 @dataclass
@@ -32,8 +36,15 @@ def _no_sheet_message() -> str:
     )
 
 
-def _no_creds_message() -> str:
-    return "Не настроен GOOGLE_SERVICE_ACCOUNT_JSON — запись в таблицу недоступна."
+def _write_failed_message() -> str:
+    creds_problem = sheets_credentials_problem()
+    if creds_problem:
+        return creds_problem
+    return (
+        "Не удалось записать в Google Sheets (права service account или sheet_id).\n"
+        "Проверь: таблица расшарена на client_email из JSON (Editor), "
+        "sheet_id группы верный. Детали — в journalctl бота."
+    )
 
 
 async def sync_member_goals_to_sheet(
@@ -70,7 +81,7 @@ async def sync_member_goals_to_sheet(
         tasks_text=goals_text,
     )
     if not written:
-        return SheetSyncResult(ok=False, message=_no_creds_message())
+        return SheetSyncResult(ok=False, message=_write_failed_message())
 
     sheet_url = spreadsheet_edit_url(group.sheet_id)
     return SheetSyncResult(
@@ -90,6 +101,10 @@ async def sync_group_goals_to_sheet(
 ) -> SheetSyncResult:
     if not group.sheet_id:
         return SheetSyncResult(ok=False, message=_no_sheet_message())
+
+    creds_problem = sheets_credentials_problem()
+    if creds_problem:
+        return SheetSyncResult(ok=False, message=creds_problem)
 
     week = await get_or_create_current_week(session, group.id)
     members = await list_active_members_for_group(session, group.id)
@@ -123,7 +138,7 @@ async def sync_group_goals_to_sheet(
             break
 
     if write_failed and synced == 0:
-        return SheetSyncResult(ok=False, message=_no_creds_message())
+        return SheetSyncResult(ok=False, message=_write_failed_message())
     if synced == 0:
         return SheetSyncResult(
             ok=False,

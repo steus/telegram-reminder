@@ -157,18 +157,89 @@ def _get_progress_worksheet(spreadsheet):
     return worksheet
 
 
+def _resolve_credentials_path(raw_path: str) -> Path:
+    path = Path(raw_path.strip()).expanduser()
+    if path.is_file():
+        return path
+    if path.is_absolute():
+        return path
+    cwd_candidate = Path.cwd() / path
+    if cwd_candidate.is_file():
+        return cwd_candidate.resolve()
+    here = Path.cwd().resolve()
+    for parent in [here, *here.parents]:
+        candidate = parent / path
+        if candidate.is_file():
+            return candidate.resolve()
+        if (parent / "pyproject.toml").is_file():
+            break
+    return path
+
+
 def _load_service_account_info() -> dict[str, Any] | None:
     raw = settings.google_service_account_json
-    if not raw or not raw.strip():
+    if not raw or not str(raw).strip():
         return None
-    text = raw.strip()
+    text = str(raw).strip()
+    try:
+        if text.startswith("{"):
+            return json.loads(text)
+        path = _resolve_credentials_path(text)
+        if not path.is_file():
+            logger.warning(
+                "GOOGLE_SERVICE_ACCOUNT_JSON is not a file: %s (cwd=%s)",
+                path,
+                Path.cwd(),
+            )
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        logger.exception(
+            "GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON "
+            "(systemd EnvironmentFile often breaks inline JSON — use a file path)"
+        )
+        return None
+    except OSError:
+        logger.exception("Failed to read GOOGLE_SERVICE_ACCOUNT_JSON")
+        return None
+
+
+def sheets_credentials_problem() -> str | None:
+    """None — credentials OK; иначе текст для ведущего."""
+    raw = settings.google_service_account_json
+    if not raw or not str(raw).strip():
+        return (
+            "Не задан GOOGLE_SERVICE_ACCOUNT_JSON в .env.\n"
+            "Укажи абсолютный путь к JSON service account, например:\n"
+            "GOOGLE_SERVICE_ACCOUNT_JSON=/opt/bot-school/credentials/google-sa.json\n"
+            "и перезапусти бота. Inline JSON в .env с systemd обычно ломается."
+        )
+    text = str(raw).strip()
     if text.startswith("{"):
-        return json.loads(text)
-    path = Path(text)
-    if not path.is_file():
-        logger.warning("GOOGLE_SERVICE_ACCOUNT_JSON is not a file: %s", path)
+        try:
+            json.loads(text)
+        except json.JSONDecodeError:
+            return (
+                "GOOGLE_SERVICE_ACCOUNT_JSON выглядит как JSON, но он битый "
+                "(часто systemd EnvironmentFile портит inline-значение).\n"
+                "Положи ключ в файл и укажи абсолютный путь:\n"
+                "GOOGLE_SERVICE_ACCOUNT_JSON=/opt/bot-school/credentials/google-sa.json"
+            )
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    path = _resolve_credentials_path(text)
+    if not path.is_file():
+        return (
+            f"Файл credentials не найден: {path}\n"
+            f"Рабочая папка процесса: {Path.cwd()}\n"
+            "Задай абсолютный путь в .env и проверь, что файл на месте."
+        )
+    try:
+        json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return f"Файл {path} есть, но это не валидный JSON service account."
+    except OSError as exc:
+        return f"Не удалось прочитать {path}: {exc}"
+    return None
 
 
 def _append_row_sync(
