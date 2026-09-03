@@ -417,7 +417,7 @@ def kb_group_goals_submenu() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="Вставить «План действий»", callback_data="fc:act:paste")],
             [InlineKeyboardButton(text="Завершить вставку", callback_data="fc:act:paste_done")],
             [InlineKeyboardButton(text="Править задачи участника", callback_data="fc:act:goals_edit")],
-            [InlineKeyboardButton(text="Задачи и статусы группы", callback_data="fc:act:goals_view")],
+            [InlineKeyboardButton(text="Посмотреть задачи участников", callback_data="fc:act:goals_view")],
             [InlineKeyboardButton(text="Обновить задачи в таблице", callback_data="fc:act:goals_sync")],
             [InlineKeyboardButton(text="Ссылка на Plaud", callback_data="fc:act:plaud")],
             [InlineKeyboardButton(text="← Назад", callback_data="fc:m:root")],
