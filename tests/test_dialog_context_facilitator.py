@@ -1,6 +1,23 @@
 """Сохранение режима вставки транскрипта в dialog_context."""
 
 from app.bot.dialog_context import DialogContext
+from app.bot.facilitator_priority import facilitator_paste_takes_priority
+
+
+def test_facilitator_paste_takes_priority_over_survey() -> None:
+    """Ведущий в JTBD-анкете: @-секции и paste-режим не должны уходить в анкету."""
+    ctx = DialogContext(onboarded=True)
+    assert not facilitator_paste_takes_priority(ctx, "моя роль — маркетинг")
+
+    plan = (
+        "@StepanTeus\n"
+        "- Проанализировать статистику обращений\n"
+        "- Написать статью про WordPress\n"
+    )
+    assert facilitator_paste_takes_priority(ctx, plan)
+
+    ctx.start_facilitator_paste(group_id=1)
+    assert facilitator_paste_takes_priority(ctx, "короткий кусок без заголовка пока")
 
 
 def test_facilitator_paste_roundtrip() -> None:

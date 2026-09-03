@@ -7,6 +7,8 @@ from aiogram.filters import BaseFilter, Command
 from aiogram.types import CallbackQuery, Message
 
 from app.bot.command_names import CMD_MY_PROFILE, CMD_MY_PROFILE_FILL
+from app.bot.dialog_context import DialogContext
+from app.bot.facilitator_priority import facilitator_paste_takes_priority
 from app.bot.keyboards import kb_profile_refill_confirm, kb_profile_start
 from app.bot.messages import UNKNOWN_USER_TEXT
 from app.db.models import DialogStateEnum, OnboardingStatus
@@ -49,7 +51,15 @@ class InOnboardingSurvey(BaseFilter):
             if member is None:
                 return False
             dialog = await get_or_create_dialog_state(session, member.id)
-            return dialog.state == DialogStateEnum.onboarding_survey
+            if dialog.state != DialogStateEnum.onboarding_survey:
+                return False
+            # Ведущий-участник: @-секции / paste-режим важнее JTBD-анкеты.
+            # Иначе /group_paste_* перехватывается анкетой (роутер profile раньше facilitator).
+            if message.text:
+                ctx = DialogContext.from_json(dialog.context_json)
+                if facilitator_paste_takes_priority(ctx, message.text):
+                    return False
+            return True
 
 
 @router.message(Command(CMD_MY_PROFILE))

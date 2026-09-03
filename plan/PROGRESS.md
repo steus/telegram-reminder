@@ -88,3 +88,6 @@
   `pf:start|later|refill:*`. Профиль в `PROMPT_TRACKING`/`PROMPT_DECOMPOSE_STEPS`;
   nudge в чек-ине и декомпозиции. Миграция `e5f6a7b8c9d0`. Тесты
   `tests/test_profile_onboarding.py`.
+  **Фикс:** ведущий в `onboarding_survey` — `@`-секции/`group_paste_*` уходили
+  в анкету (profile раньше facilitator); приоритет paste —
+  `app/bot/facilitator_priority.py`.

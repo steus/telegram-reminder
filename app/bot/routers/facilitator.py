@@ -26,6 +26,7 @@ from app.bot.routers.membership import (
 )
 from app.services.sheet_sync import sync_group_goals_to_sheet
 from app.bot.dialog_context import DialogContext
+from app.bot.facilitator_priority import facilitator_paste_takes_priority
 from app.bot.states import FacilitatorStates
 from app.db.models import DialogStateEnum
 from app.db.repo import (
@@ -273,7 +274,7 @@ class FacilitatorText(BaseFilter):
         if group is None:
             return False
         text = message.text
-        # Ведущий часто совпадает с участником: не перехватывать чек-ин, цели, декомпозицию.
+        # Ведущий часто совпадает с участником: не перехватывать чек-ин, цели, декомпозицию, анкету.
         async with get_session() as session:
             member = await get_member_by_chat_id(session, message.chat.id)
             if member is not None:
@@ -290,7 +291,10 @@ class FacilitatorText(BaseFilter):
                     DialogStateEnum.decomposing,
                 ):
                     return False
-                if ctx.is_facilitator_pasting() or has_action_plan_markers(text):
+                # JTBD-анкета: уступаем, кроме paste-режима и @-секций «Плана действий».
+                if dialog.state == DialogStateEnum.onboarding_survey:
+                    return facilitator_paste_takes_priority(ctx, text)
+                if facilitator_paste_takes_priority(ctx, text):
                     return True
         return True
 
