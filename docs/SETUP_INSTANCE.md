@@ -294,7 +294,8 @@ sqlite3 data/app.db "UPDATE \"group\" SET sheet_id='1AbCdEfGhIjKlMnOpQrStUvWxYz'
 
 | Симптом | Причина | Решение |
 |---------|---------|---------|
-| «Не настроен GOOGLE_SERVICE_ACCOUNT_JSON» / битый JSON | Пустой `.env`, относительный путь, или **inline JSON** | Только **абсолютный путь** к файлу. Systemd `EnvironmentFile` **ломает** JSON в одну строку с кавычками. Пример: `GOOGLE_SERVICE_ACCOUNT_JSON=/opt/bot-school/credentials/google-sa.json` |
+| «Не настроен GOOGLE_SERVICE_ACCOUNT_JSON» / битый JSON | Пустой `.env`, относительный путь, или **inline JSON** | Только **путь к файлу**. Systemd `EnvironmentFile` **ломает** inline JSON. |
+| «Файл credentials не найден» + `cwd=/app` | Docker: в `.env` путь **хоста** (`/opt/...`), а в контейнере файла нет | В `.env`: `GOOGLE_SERVICE_ACCOUNT_JSON=/app/credentails/primereminder.json` и том `./credentails:/app/credentails:ro` в compose, затем `docker compose up -d` |
 | «У группы не настроена таблица (sheet_id)» | `sheet_id` NULL в БД | UPDATE в `"group"` |
 | `403 Permission denied` | Таблица не расшарена на service account | Share → `client_email` → Editor |
 | `404 Spreadsheet not found` | Неверный `sheet_id` | Проверить URL таблицы |

@@ -228,10 +228,19 @@ def sheets_credentials_problem() -> str | None:
         return None
     path = _resolve_credentials_path(text)
     if not path.is_file():
+        hint = ""
+        if Path.cwd().as_posix() in ("/app", "/app/") or str(path).startswith("/opt/"):
+            hint = (
+                "\nПохоже, бот в Docker: путь должен быть внутри контейнера "
+                "(например /app/credentails/primereminder.json), "
+                "а каталог смонтирован томом ./credentails:/app/credentails:ro."
+            )
         return (
             f"Файл credentials не найден: {path}\n"
-            f"Рабочая папка процесса: {Path.cwd()}\n"
-            "Задай абсолютный путь в .env и проверь, что файл на месте."
+            f"Рабочая папка процесса: {Path.cwd()}"
+            f"{hint}\n"
+            "Задай путь в .env и пересоздай контейнер (compose up -d), "
+            "если менял volumes."
         )
     try:
         json.loads(path.read_text(encoding="utf-8"))

@@ -99,6 +99,7 @@ cd /opt/bot-tracker
 |---------|---------|
 | Код на сервере старый после deploy | Нужен **build**, не только `restart.sh` — `./scripts/rebuild.sh` или `./scripts/deploy.sh` |
 | `/app/data is not writable` | `./scripts/deploy.sh --fix-perms` или выровнять `UID`/`GID` в `.env` с `id -u` / `id -g` |
+| Sheets: файл credentials не найден, cwd=`/app` | В `.env` путь **внутри контейнера**: `GOOGLE_SERVICE_ACCOUNT_JSON=/app/credentails/….json`; том `./credentails:/app/credentails:ro` в compose; `docker compose up -d` |
 | «Нет активной группы» | `seed_member.py` или invite `/group_invite` |
 | `database is locked` | `docker compose stop bot`, закрыть DB Browser, `./scripts/deploy.sh` |
 | БД «откатилась» после deploy | Обычный deploy БД не трогает; проверь, не вызывался ли `restore_db.sh` или старый `deploy.sh --db` |
