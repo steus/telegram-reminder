@@ -376,6 +376,37 @@ def merge_action_plan_transcripts(existing: str | None, new_text: str) -> str:
     return "\n\n".join(_format_action_plan_section(h, t) for h, t in merged).strip()
 
 
+def replace_member_action_plan_tasks(
+    transcript: str, *, member_name: str, tasks: list[str]
+) -> str:
+    """Обновить или добавить @-секцию участника с новым списком задач."""
+    name = member_name.strip()
+    clean_tasks = [t.strip() for t in tasks if t and t.strip()]
+    plan_body = _find_plan_body(transcript)
+    if plan_body is None:
+        if not clean_tasks:
+            return (transcript or "").strip()
+        return _format_action_plan_section(name, clean_tasks)
+
+    sections = list(_parse_sections(plan_body))
+    idx = next(
+        (i for i, (h, _) in enumerate(sections) if _header_matches_member(h, name)),
+        None,
+    )
+    if idx is not None:
+        header = sections[idx][0]
+        if not clean_tasks:
+            sections.pop(idx)
+        else:
+            sections[idx] = (header, clean_tasks)
+    elif clean_tasks:
+        sections.append((name, clean_tasks))
+
+    if not sections:
+        return ""
+    return "\n\n".join(_format_action_plan_section(h, t) for h, t in sections).strip()
+
+
 def member_has_action_plan_section(transcript: str, full_name: str) -> bool:
     """Есть ли в транскрипте @-секция для участника."""
     for header, _ in list_action_plan_sections(transcript):

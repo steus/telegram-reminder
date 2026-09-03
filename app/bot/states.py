@@ -34,6 +34,7 @@ class FacilitatorStates(StatesGroup):
     pasting_transcript = State()
     confirm_resend = State()
     assigning_section = State()
+    editing_member_goals = State()
 
 
 class MembershipStates(StatesGroup):

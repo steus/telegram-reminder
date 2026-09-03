@@ -28,13 +28,21 @@ from app.services.sheet_sync import sync_group_goals_to_sheet
 from app.bot.dialog_context import DialogContext
 from app.bot.facilitator_priority import facilitator_paste_takes_priority
 from app.bot.states import FacilitatorStates
-from app.db.models import DialogStateEnum
+from app.bot.task_confirmation import (
+    confirmation_message,
+    format_task_list,
+    kb_task_confirmation,
+)
+from app.db.models import DialogStateEnum, TaskSource
 from app.db.repo import (
     get_group_by_facilitator_chat_id,
     get_member_by_chat_id,
+    get_member_by_id,
     get_or_create_current_week,
     get_or_create_dialog_state,
     list_active_members_for_group,
+    list_tasks_for_member_week,
+    replace_tasks,
     update_dialog_context,
     update_week_plaud_url,
     update_week_transcript,
@@ -49,11 +57,14 @@ from app.services.auto_goal_setup import (
     run_auto_extraction_for_group,
     should_confirm_resend,
 )
+from app.services.extraction import start_auto_goal_confirmation, structure_goals
 from app.services.plaud_action_plan import (
     count_action_plan_sections,
+    extract_tasks_from_action_plan,
     has_action_plan_markers,
     list_unmatched_action_plan_headers,
     merge_action_plan_transcripts,
+    replace_member_action_plan_tasks,
 )
 
 router = Router(name="facilitator")
@@ -85,6 +96,12 @@ def _kb_confirm_send(week_id: int) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="📤 Разослать участникам",
                     callback_data=f"fc:send:{week_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="✏️ Править задачи",
+                    callback_data=f"fc:ed:pick:{week_id}",
                 )
             ],
             [
@@ -292,9 +309,29 @@ class FacilitatorText(BaseFilter):
                 # JTBD-анкета: уступаем, кроме paste-режима и @-секций «Плана действий».
                 if dialog.state == DialogStateEnum.onboarding_survey:
                     return facilitator_paste_takes_priority(ctx, text)
+                # Правка задач участника ведущим — отдельный хендлер.
+                if ctx.is_facilitator_editing_goals():
+                    return False
                 if facilitator_paste_takes_priority(ctx, text):
                     return True
         return True
+
+
+class FacilitatorEditingGoals(BaseFilter):
+    """Ведущий вводит новый список задач для выбранного участника."""
+
+    async def __call__(self, message: Message) -> bool:
+        if not message.text or message.text.startswith("/"):
+            return False
+        if await _facilitator_group(message.chat.id) is None:
+            return False
+        async with get_session() as session:
+            member = await get_member_by_chat_id(session, message.chat.id)
+            if member is None:
+                return False
+            dialog = await get_or_create_dialog_state(session, member.id)
+            ctx = DialogContext.from_json(dialog.context_json)
+            return ctx.is_facilitator_editing_goals()
 
 
 async def send_group_sync_goals(message: Message, group) -> None:
@@ -419,6 +456,31 @@ async def cb_group_act_goals_view(callback: CallbackQuery) -> None:
         return
     await callback.answer()
     await send_group_view_goals(callback.message, group)
+
+
+@router.callback_query(F.data == "fc:act:goals_edit")
+async def cb_group_act_goals_edit(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        return
+    group = await _facilitator_group(callback.message.chat.id)
+    if group is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    async with get_session() as session:
+        members = await list_active_members_for_group(session, group.id)
+    if not members:
+        await callback.answer("Нет активных участников.", show_alert=True)
+        return
+    await state.update_data(
+        facilitator_group_id=group.id,
+        edit_return="menu",
+        pending_transcript=None,
+    )
+    await callback.answer()
+    await callback.message.answer(
+        "Чьи задачи правим?",
+        reply_markup=kb.kb_pick_member_for_edit(members, back_callback="fc:m:goals"),
+    )
 
 
 @router.callback_query(F.data == "fc:act:goals_sync")
@@ -755,6 +817,304 @@ async def cb_facilitator_resend_no(callback: CallbackQuery, state: FSMContext) -
     await callback.answer()
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(format_facilitator_report(AutoExtractionResult(), saved_only=True))
+
+
+_FACILITATOR_EDIT_PROMPT = (
+    "Пришли исправленный список задач — каждая с новой строки.\n"
+    "Я обновлю список и покажу снова."
+)
+
+
+async def _begin_edit_member_goals(
+    message: Message,
+    state: FSMContext,
+    *,
+    group_id: int,
+    target_member_id: int,
+    edit_return: str,
+) -> None:
+    data = await state.get_data()
+    pending = (data.get("pending_transcript") or "").strip()
+
+    async with get_session() as session:
+        target = await get_member_by_id(session, target_member_id)
+        if target is None or not target.is_active or target.group_id != group_id:
+            await message.answer("Участник не найден или неактивен.")
+            return
+        week = await get_or_create_current_week(session, group_id)
+        db_tasks = await list_tasks_for_member_week(session, target.id, week.id)
+        plan_source = pending or (week.transcript_text or "")
+        plan_tasks = extract_tasks_from_action_plan(plan_source, target.full_name) or []
+        facilitator = await get_member_by_chat_id(session, message.chat.id)
+        if facilitator is not None:
+            dialog = await get_or_create_dialog_state(session, facilitator.id)
+            ctx = DialogContext.from_json(dialog.context_json)
+            ctx.start_facilitator_edit(target.id)
+            if edit_return == "preview" and ctx.facilitator_group_id is None:
+                ctx.facilitator_group_id = group_id
+            await update_dialog_context(session, facilitator.id, ctx.to_json())
+
+        target_name = target.full_name
+        week_label = week.start_date.strftime("%d.%m.%Y")
+        week_id = week.id
+        if db_tasks:
+            current = format_task_list(db_tasks)
+        elif plan_tasks:
+            current = "\n".join(f"{i}. {t}" for i, t in enumerate(plan_tasks, start=1))
+        else:
+            current = "Задач пока нет."
+
+    await state.set_state(FacilitatorStates.editing_member_goals)
+    await state.update_data(
+        facilitator_group_id=group_id,
+        edit_member_id=target_member_id,
+        edit_return=edit_return,
+        pending_transcript=data.get("pending_transcript"),
+        resend_week_id=data.get("resend_week_id") or week_id,
+    )
+
+    await message.answer(
+        f"Задачи {target_name} (неделя с {week_label}):\n\n"
+        f"{current}\n\n{_FACILITATOR_EDIT_PROMPT}"
+    )
+
+
+async def _reshow_paste_preview(message: Message, state: FSMContext, *, group_id: int) -> None:
+    data = await state.get_data()
+    pasted = (data.get("pending_transcript") or "").strip()
+    week_id = data.get("resend_week_id")
+    async with get_session() as session:
+        week = await get_or_create_current_week(session, group_id)
+        if not pasted:
+            pasted = (week.transcript_text or "").strip()
+        if week_id is None:
+            week_id = week.id
+        preview = await preview_paste_assignments(session, group_id, pasted)
+        resend = await should_confirm_resend(
+            session,
+            group_id,
+            week.id,
+            had_transcript=True,
+            pasted_text=pasted,
+        )
+    await state.set_state(FacilitatorStates.confirm_resend)
+    await state.update_data(
+        facilitator_group_id=group_id,
+        resend_week_id=week_id,
+        pending_transcript=pasted,
+        edit_member_id=None,
+    )
+    await message.answer(
+        format_facilitator_report(preview, preview=True, resend=resend),
+        reply_markup=_kb_confirm_send(week_id),
+    )
+
+
+@router.callback_query(F.data.startswith("fc:ed:pick:"))
+async def cb_edit_pick_from_preview(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None or callback.data is None:
+        return
+    group = await _facilitator_group(callback.message.chat.id)
+    if group is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    data = await state.get_data()
+    pasted = (data.get("pending_transcript") or "").strip()
+    async with get_session() as session:
+        members = await list_active_members_for_group(session, group.id)
+        if pasted:
+            preview = await preview_paste_assignments(session, group.id, pasted)
+            matched_names = set(preview.sent_with_goals) | {
+                name for name, _ in preview.without_goals
+            }
+            if matched_names:
+                members = [m for m in members if m.full_name in matched_names] or members
+    if not members:
+        await callback.answer("Нет участников для правки.", show_alert=True)
+        return
+    await state.update_data(edit_return="preview", facilitator_group_id=group.id)
+    await callback.answer()
+    await callback.message.answer(
+        "Чьи задачи из превью правим?",
+        reply_markup=kb.kb_pick_member_for_edit(
+            members, back_callback=f"fc:ed:back:{group.id}"
+        ),
+    )
+
+
+@router.callback_query(F.data.startswith("fc:ed:back:"))
+async def cb_edit_back_to_preview(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None or callback.data is None:
+        return
+    try:
+        group_id = int(callback.data.removeprefix("fc:ed:back:"))
+    except ValueError:
+        await callback.answer("Сессия устарела.", show_alert=True)
+        return
+    if await _facilitator_group(callback.message.chat.id) is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    await _reshow_paste_preview(callback.message, state, group_id=group_id)
+
+
+@router.callback_query(F.data.startswith("fc:ed:m:"))
+async def cb_edit_pick_member(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None or callback.data is None:
+        return
+    group = await _facilitator_group(callback.message.chat.id)
+    if group is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    try:
+        target_id = int(callback.data.removeprefix("fc:ed:m:"))
+    except ValueError:
+        await callback.answer("Некорректная кнопка.", show_alert=True)
+        return
+    data = await state.get_data()
+    edit_return = data.get("edit_return") or "menu"
+    await callback.answer()
+    await _begin_edit_member_goals(
+        callback.message,
+        state,
+        group_id=group.id,
+        target_member_id=target_id,
+        edit_return=edit_return,
+    )
+
+
+@router.message(FacilitatorEditingGoals())
+async def handle_facilitator_edit_goals_text(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    group_id = data.get("facilitator_group_id")
+    target_id = data.get("edit_member_id")
+    edit_return = data.get("edit_return") or "menu"
+    if group_id is None or target_id is None:
+        await message.answer("Сессия правки истекла — выбери участника снова.")
+        await state.clear()
+        return
+
+    texts = await structure_goals(message.text or "")
+    if not texts:
+        await message.answer(
+            "Не нашёл ни одной задачи. Пришли списком — каждая с новой строки."
+        )
+        return
+
+    async with get_session() as session:
+        target = await get_member_by_id(session, target_id)
+        if target is None or target.group_id != group_id:
+            await message.answer("Участник не найден.")
+            return
+        week = await get_or_create_current_week(session, group_id)
+        await replace_tasks(
+            session,
+            member_id=target.id,
+            week_id=week.id,
+            texts=texts,
+            source=TaskSource.manual,
+        )
+        new_transcript = replace_member_action_plan_tasks(
+            week.transcript_text or "",
+            member_name=target.full_name,
+            tasks=texts,
+        )
+        await update_week_transcript(session, week.id, new_transcript)
+        week.transcript_text = new_transcript
+
+        pending = (data.get("pending_transcript") or "").strip()
+        if pending:
+            pending = replace_member_action_plan_tasks(
+                pending, member_name=target.full_name, tasks=texts
+            )
+        elif edit_return == "preview":
+            pending = replace_member_action_plan_tasks(
+                "", member_name=target.full_name, tasks=texts
+            )
+
+        facilitator = await get_member_by_chat_id(session, message.chat.id)
+        if facilitator is not None:
+            dialog = await get_or_create_dialog_state(session, facilitator.id)
+            ctx = DialogContext.from_json(dialog.context_json)
+            ctx.clear_facilitator_edit()
+            if pending:
+                ctx.facilitator_pending = pending
+                ctx.facilitator_group_id = group_id
+            await update_dialog_context(session, facilitator.id, ctx.to_json())
+
+        tasks = await list_tasks_for_member_week(session, target.id, week.id)
+        name = target.full_name
+        week_id = week.id
+
+    await state.update_data(
+        pending_transcript=pending or None,
+        edit_member_id=None,
+        resend_week_id=week_id,
+    )
+
+    body = format_task_list(tasks)
+    if edit_return == "preview":
+        await message.answer(f"Обновил задачи для {name}:\n\n{body}")
+        await _reshow_paste_preview(message, state, group_id=group_id)
+        return
+
+    await state.clear()
+    await message.answer(
+        f"Сохранил задачи для {name}:\n\n{body}",
+        reply_markup=kb.kb_after_facilitator_edit(target_id),
+    )
+
+
+@router.callback_query(F.data.startswith("fc:ed:send:"))
+async def cb_edit_send_to_member(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None or callback.data is None:
+        return
+    group = await _facilitator_group(callback.message.chat.id)
+    if group is None:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    try:
+        target_id = int(callback.data.removeprefix("fc:ed:send:"))
+    except ValueError:
+        await callback.answer("Некорректная кнопка.", show_alert=True)
+        return
+
+    async with get_session() as session:
+        target = await get_member_by_id(session, target_id)
+        if target is None or not target.is_active or target.group_id != group.id:
+            await callback.answer("Участник не найден.", show_alert=True)
+            return
+        week = await get_or_create_current_week(session, group.id)
+        tasks = await list_tasks_for_member_week(session, target.id, week.id)
+        if not tasks:
+            await callback.answer("У участника нет задач на эту неделю.", show_alert=True)
+            return
+        await start_auto_goal_confirmation(session, target)
+        dialog = await get_or_create_dialog_state(session, target.id)
+        ctx = DialogContext.from_json(dialog.context_json)
+        ctx.show_task_confirmation()
+        await update_dialog_context(session, target.id, ctx.to_json())
+        await callback.bot.send_message(
+            target.telegram_chat_id,
+            confirmation_message(tasks),
+            reply_markup=kb_task_confirmation(week.id),
+        )
+        name = target.full_name
+
+    await callback.answer()
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer(f"Экран подтверждения отправлен: {name}.")
+    await state.clear()
+
+
+@router.callback_query(F.data == "fc:ed:done")
+async def cb_edit_done(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        return
+    await state.clear()
+    await callback.answer()
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer("Ок, задачи сохранены без рассылки.")
 
 
 @router.callback_query(F.data == "fc:asg:x")

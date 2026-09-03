@@ -416,6 +416,7 @@ def kb_group_goals_submenu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Задачи и статусы группы", callback_data="fc:act:goals_view")],
+            [InlineKeyboardButton(text="Править задачи участника", callback_data="fc:act:goals_edit")],
             [InlineKeyboardButton(text="Обновить задачи в таблице", callback_data="fc:act:goals_sync")],
             [InlineKeyboardButton(text="← Назад", callback_data="fc:m:root")],
         ]
@@ -469,6 +470,35 @@ def kb_assign_pick_member(
         [InlineKeyboardButton(text="← К @-секциям", callback_data="fc:asg:back")]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def kb_pick_member_for_edit(
+    members: list[Member], *, back_callback: str = "fc:m:goals"
+) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for member in members[:30]:
+        name = member.full_name
+        if len(name) > 40:
+            name = name[:37] + "…"
+        rows.append(
+            [InlineKeyboardButton(text=name, callback_data=f"fc:ed:m:{member.id}")]
+        )
+    rows.append([InlineKeyboardButton(text="← Назад", callback_data=back_callback)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def kb_after_facilitator_edit(member_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📤 Отправить участнику",
+                    callback_data=f"fc:ed:send:{member_id}",
+                )
+            ],
+            [InlineKeyboardButton(text="Готово", callback_data="fc:ed:done")],
+        ]
+    )
 
 
 def kb_group_members(

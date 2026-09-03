@@ -53,12 +53,12 @@ class InOnboardingSurvey(BaseFilter):
             dialog = await get_or_create_dialog_state(session, member.id)
             if dialog.state != DialogStateEnum.onboarding_survey:
                 return False
-            # Ведущий-участник: @-секции / paste-режим важнее JTBD-анкеты.
-            # Иначе /group_paste_* перехватывается анкетой (роутер profile раньше facilitator).
-            if message.text:
-                ctx = DialogContext.from_json(dialog.context_json)
-                if facilitator_paste_takes_priority(ctx, message.text):
-                    return False
+            # Ведущий-участник: @-секции / paste-режим / правка чужих задач важнее JTBD-анкеты.
+            ctx = DialogContext.from_json(dialog.context_json)
+            if ctx.is_facilitator_editing_goals():
+                return False
+            if message.text and facilitator_paste_takes_priority(ctx, message.text):
+                return False
             return True
 
 

@@ -226,3 +226,23 @@ def test_rebind_section_removes_from_unmatched() -> None:
     assert extract_tasks_from_action_plan(rebound, "Maia") == ["Task A", "Task B"]
     assert list_unmatched_action_plan_headers(rebound, ["Maia", "Stepan"]) == []
     assert "MayaMich" not in rebound
+
+
+def test_replace_member_action_plan_tasks() -> None:
+    from app.services.plaud_action_plan import replace_member_action_plan_tasks
+
+    text = "@Deniss\n- Old one\n- Old two\n\n@Stepan\n- Keep\n"
+    updated = replace_member_action_plan_tasks(
+        text,
+        member_name="Deniss Kudrjashov",
+        tasks=["New A", "New B"],
+    )
+    assert extract_tasks_from_action_plan(updated, "Deniss") == ["New A", "New B"]
+    assert extract_tasks_from_action_plan(updated, "Stepan") == ["Keep"]
+
+    created = replace_member_action_plan_tasks(
+        "",
+        member_name="Olga",
+        tasks=["Only task"],
+    )
+    assert extract_tasks_from_action_plan(created, "Olga") == ["Only task"]

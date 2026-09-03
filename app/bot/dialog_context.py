@@ -21,6 +21,7 @@ class DialogContext:
     task_step: str | None = None  # collect | confirm | correct
     facilitator_group_id: int | None = None
     facilitator_pending: str | None = None
+    facilitator_edit_member_id: int | None = None
     checkin_messages: list[dict[str, str]] | None = None
     decompose_task_id: int | None = None
     decompose_steps: list[str] | None = None
@@ -44,6 +45,7 @@ class DialogContext:
             task_step=data.get("task_step"),
             facilitator_group_id=data.get("facilitator_group_id"),
             facilitator_pending=data.get("facilitator_pending"),
+            facilitator_edit_member_id=data.get("facilitator_edit_member_id"),
             checkin_messages=_parse_message_list(data.get("checkin_messages")),
             decompose_task_id=data.get("decompose_task_id"),
             decompose_steps=_parse_str_list(data.get("decompose_steps")),
@@ -122,9 +124,19 @@ class DialogContext:
     def clear_facilitator_paste(self) -> None:
         self.facilitator_group_id = None
         self.facilitator_pending = None
+        self.facilitator_edit_member_id = None
 
     def is_facilitator_pasting(self) -> bool:
         return self.facilitator_group_id is not None
+
+    def start_facilitator_edit(self, member_id: int) -> None:
+        self.facilitator_edit_member_id = member_id
+
+    def clear_facilitator_edit(self) -> None:
+        self.facilitator_edit_member_id = None
+
+    def is_facilitator_editing_goals(self) -> bool:
+        return self.facilitator_edit_member_id is not None
 
     def append_checkin_message(self, role: str, content: str) -> None:
         messages = list(self.checkin_messages or [])
