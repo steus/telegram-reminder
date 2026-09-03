@@ -76,8 +76,7 @@ _ONE_SHOT_MAX_LEN = 3500
 
 _GROUP_MENU_TEXT = "Меню ведущего — выбери раздел:"
 _GROUP_MEMBERS_TEXT = "Участники и заявки:"
-_GROUP_GOALS_TEXT = "Задачи группы:"
-_GROUP_TRANSCRIPT_TEXT = "Транскрипт (Plaud):"
+_GROUP_GOALS_TEXT = "Задачи группы — план недели, правка и статусы:"
 
 
 def _not_facilitator_text(chat_id: int) -> str:
@@ -399,6 +398,7 @@ async def cb_group_menu_goals(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "fc:m:transcript")
 async def cb_group_menu_transcript(callback: CallbackQuery) -> None:
+    """Старые сообщения меню: Plaud переехал в «Задачи группы»."""
     if callback.message is None:
         return
     if await _facilitator_group(callback.message.chat.id) is None:
@@ -406,7 +406,7 @@ async def cb_group_menu_transcript(callback: CallbackQuery) -> None:
         return
     await callback.answer()
     await callback.message.edit_text(
-        _GROUP_TRANSCRIPT_TEXT, reply_markup=kb.kb_group_transcript_submenu()
+        _GROUP_GOALS_TEXT, reply_markup=kb.kb_group_goals_submenu()
     )
 
 

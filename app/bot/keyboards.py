@@ -396,7 +396,6 @@ def kb_group_menu() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="👥 Участники и заявки", callback_data="fc:m:members")],
             [InlineKeyboardButton(text="🎯 Задачи группы", callback_data="fc:m:goals")],
-            [InlineKeyboardButton(text="📝 Транскрипт (Plaud)", callback_data="fc:m:transcript")],
         ]
     )
 
@@ -415,23 +414,20 @@ def kb_group_members_submenu() -> InlineKeyboardMarkup:
 def kb_group_goals_submenu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Задачи и статусы группы", callback_data="fc:act:goals_view")],
+            [InlineKeyboardButton(text="Вставить «План действий»", callback_data="fc:act:paste")],
+            [InlineKeyboardButton(text="Завершить вставку", callback_data="fc:act:paste_done")],
             [InlineKeyboardButton(text="Править задачи участника", callback_data="fc:act:goals_edit")],
+            [InlineKeyboardButton(text="Задачи и статусы группы", callback_data="fc:act:goals_view")],
             [InlineKeyboardButton(text="Обновить задачи в таблице", callback_data="fc:act:goals_sync")],
+            [InlineKeyboardButton(text="Ссылка на Plaud", callback_data="fc:act:plaud")],
             [InlineKeyboardButton(text="← Назад", callback_data="fc:m:root")],
         ]
     )
 
 
 def kb_group_transcript_submenu() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Вставить «План действий»", callback_data="fc:act:paste")],
-            [InlineKeyboardButton(text="Завершить вставку", callback_data="fc:act:paste_done")],
-            [InlineKeyboardButton(text="Ссылка на Plaud", callback_data="fc:act:plaud")],
-            [InlineKeyboardButton(text="← Назад", callback_data="fc:m:root")],
-        ]
-    )
+    """Совместимость со старыми сообщениями меню — тот же набор, что у задач."""
+    return kb_group_goals_submenu()
 
 
 def kb_assign_unmatched_headers(headers: list[str]) -> InlineKeyboardMarkup:
