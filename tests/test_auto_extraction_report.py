@@ -25,6 +25,30 @@ def test_format_facilitator_report_with_assignments() -> None:
     assert "Согласовать договор" in text
     assert "Maria" in text
     assert REASON_NO_GOALS in text
+    assert "отправлен" in text
+
+
+def test_format_facilitator_report_preview() -> None:
+    result = AutoExtractionResult(
+        sent_with_goals=["Deniss"],
+        sent_tasks={"Deniss": ["Провести тестирование", "Запустить оценку"]},
+    )
+    text = format_facilitator_report(result, preview=True)
+    assert "пока ничего не отправлено" in text
+    assert "Будет отправлено" in text
+    assert "Deniss" in text
+    assert "Провести тестирование" in text
+    assert "отправлен (" not in text
+
+
+def test_format_facilitator_report_preview_resend() -> None:
+    result = AutoExtractionResult(
+        sent_with_goals=["Deniss"],
+        sent_tasks={"Deniss": ["Задача"]},
+    )
+    text = format_facilitator_report(result, preview=True, resend=True)
+    assert "уже отправляли" in text
+    assert "Будет отправлено" in text
 
 
 def test_format_facilitator_report_saved_only() -> None:

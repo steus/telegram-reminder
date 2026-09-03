@@ -45,6 +45,7 @@ from app.services.auto_goal_setup import (
     AutoExtractionResult,
     assign_plan_section_to_member,
     format_facilitator_report,
+    preview_paste_assignments,
     run_auto_extraction_for_group,
     should_confirm_resend,
 )
@@ -77,7 +78,7 @@ def _not_facilitator_text(chat_id: int) -> str:
     )
 
 
-def _kb_confirm_resend(week_id: int) -> InlineKeyboardMarkup:
+def _kb_confirm_send(week_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -184,29 +185,18 @@ async def _finalize_transcript(
             week.transcript_text = merged
             week_id = week.id
 
-            if await should_confirm_resend(
+            preview = await preview_paste_assignments(session, group_id, text)
+            resend = await should_confirm_resend(
                 session,
                 group_id,
                 week_id,
                 had_transcript=had_transcript,
                 pasted_text=text,
-            ):
-                await state.set_state(FacilitatorStates.confirm_resend)
-                await state.update_data(facilitator_group_id=group_id, resend_week_id=week_id)
-                if ctx is not None and member_id is not None:
-                    ctx.facilitator_group_id = group_id
-                    ctx.facilitator_pending = text
-                    await update_dialog_context(session, member_id, ctx.to_json())
-                await message.answer(
-                    "Транскрипт обновлён. Участникам уже отправляли задачи на подтверждение.\n\n"
-                    "Разослать заново с учётом правок?",
-                    reply_markup=_kb_confirm_resend(week_id),
-                )
-                return
-
-            result = await run_auto_extraction_for_group(
-                session, message.bot, group_id, pasted_text=text
             )
+            if ctx is not None and member_id is not None:
+                ctx.facilitator_group_id = group_id
+                ctx.facilitator_pending = text
+                await update_dialog_context(session, member_id, ctx.to_json())
     except Exception as exc:
         logger.exception("Failed to finalize transcript paste")
         err = str(exc).lower()
@@ -223,8 +213,16 @@ async def _finalize_transcript(
             )
         return
 
-    await _clear_paste_context(message.chat.id, state, ctx, member_id)
-    await _send_extraction_report(message, state, group_id=group_id, result=result)
+    await state.set_state(FacilitatorStates.confirm_resend)
+    await state.update_data(
+        facilitator_group_id=group_id,
+        resend_week_id=week_id,
+        pending_transcript=text,
+    )
+    await message.answer(
+        format_facilitator_report(preview, preview=True, resend=resend),
+        reply_markup=_kb_confirm_send(week_id),
+    )
 
 
 async def _send_extraction_report(
@@ -475,12 +473,14 @@ async def _begin_paste_transcript(message: Message, state: FSMContext):
 async def _show_paste_prompt(message: Message) -> None:
     await message.answer(
         "Жду текст «Плана действий». Можно так:\n\n"
-        "1) Одна или несколько @-секций одним сообщением → сразу обработаю "
-        "и покажу, кому что ушло.\n"
-        "2) По частям: каждая @-секция обрабатывается сразу "
+        "1) Одна или несколько @-секций одним сообщением → покажу превью, "
+        "разошлю участникам только после твоей кнопки.\n"
+        "2) По частям: каждая @-секция сразу в превью "
         f"(или накопи и заверши /{CMD_GROUP_PASTE_DONE}).\n"
         f"3) Без /{CMD_GROUP_PASTE_TRANSCRIPT} — одна @-секция тоже сработает "
-        f"(если не вводишь свои задачи через /{CMD_GOALS})."
+        f"(если не вводишь свои задачи через /{CMD_GOALS}).\n\n"
+        "Пиши @Имя Фамилия (с пробелом) — иначе Telegram может подставить "
+        "чужой публичный @username."
     )
 
 
@@ -706,10 +706,29 @@ async def cb_facilitator_resend_yes(callback: CallbackQuery, state: FSMContext) 
         )
         return
 
+    pasted = (data.get("pending_transcript") or "").strip()
+    ctx: DialogContext | None = None
+    member_id: int | None = None
+
     async with get_session() as session:
+        member = await get_member_by_chat_id(session, callback.message.chat.id)
+        if member is not None:
+            member_id = member.id
+            dialog = await get_or_create_dialog_state(session, member.id)
+            ctx = DialogContext.from_json(dialog.context_json)
+            if not pasted and ctx.facilitator_pending:
+                pasted = ctx.facilitator_pending.strip()
+
         result = await run_auto_extraction_for_group(
-            session, callback.bot, group_id, force=True
+            session,
+            callback.bot,
+            group_id,
+            force=True,
+            pasted_text=pasted or None,
         )
+        if ctx is not None and member_id is not None:
+            ctx.clear_facilitator_paste()
+            await update_dialog_context(session, member_id, ctx.to_json())
 
     await state.clear()
     await callback.answer()
@@ -723,6 +742,14 @@ async def cb_facilitator_resend_yes(callback: CallbackQuery, state: FSMContext) 
 async def cb_facilitator_resend_no(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message is None:
         return
+
+    async with get_session() as session:
+        member = await get_member_by_chat_id(session, callback.message.chat.id)
+        if member is not None:
+            dialog = await get_or_create_dialog_state(session, member.id)
+            ctx = DialogContext.from_json(dialog.context_json)
+            ctx.clear_facilitator_paste()
+            await update_dialog_context(session, member.id, ctx.to_json())
 
     await state.clear()
     await callback.answer()

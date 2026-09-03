@@ -33,6 +33,7 @@ from app.services.plaud import PlaudManualRequired, fetch_transcript
 from app.services.plaud_action_plan import (
     count_action_plan_sections,
     extract_tasks_for_header,
+    extract_tasks_from_action_plan,
     list_unmatched_action_plan_headers,
     member_has_action_plan_section,
     rebind_action_plan_section,
@@ -62,13 +63,53 @@ class AutoExtractionResult:
     no_auto_members: bool = False
 
 
-def format_facilitator_report(result: AutoExtractionResult, *, saved_only: bool = False) -> str:
+def format_facilitator_report(
+    result: AutoExtractionResult,
+    *,
+    saved_only: bool = False,
+    preview: bool = False,
+    resend: bool = False,
+) -> str:
     if saved_only:
         return (
             "Транскрипт сохранён. Участникам ничего не отправлено.\n"
             "Чтобы разослать позже — снова /group_paste_transcript (текст можно тот же) "
             "и выбери «Разослать участникам»."
         )
+
+    if preview:
+        if resend:
+            lines = [
+                "Транскрипт обновлён. Участникам уже отправляли задачи ранее.",
+                "Проверь список — разослать заново только после твоей кнопки:",
+            ]
+        else:
+            lines = [
+                "Транскрипт сохранён. Участникам пока ничего не отправлено.",
+                "Проверь список — разошлю экран подтверждения только после твоей кнопки:",
+            ]
+        if result.sent_with_goals:
+            lines.append(f"\nБудет отправлено ({len(result.sent_with_goals)}):")
+            for name in result.sent_with_goals:
+                lines.append(f"\n{name}:")
+                tasks = result.sent_tasks.get(name) or []
+                if tasks:
+                    for idx, task in enumerate(tasks, start=1):
+                        lines.append(f"  {idx}. {task}")
+                else:
+                    lines.append("  (список задач недоступен)")
+        if result.without_goals:
+            lines.append("\nНе удалось сопоставить:")
+            for name, reason in result.without_goals:
+                lines.append(f"  • {name} — {reason}")
+        if result.unmatched_headers:
+            lines.append("\nНе сопоставлены с участниками группы:")
+            for header in result.unmatched_headers:
+                lines.append(f"  • @{header}")
+            lines.append("После рассылки можно назначить вручную.")
+        if not result.sent_with_goals and not result.without_goals and not result.unmatched_headers:
+            lines.append("\nНекому отправлять — проверь @-заголовки и состав группы.")
+        return "\n".join(lines)
 
     lines = ["Транскрипт сохранён."]
     if result.no_auto_members:
@@ -123,12 +164,53 @@ async def should_confirm_resend(
     had_transcript: bool,
     pasted_text: str,
 ) -> bool:
-    """Спросить ведущего перед повторной рассылкой полного плана."""
+    """Повторная вставка при уже открытых экранах подтверждения у участников."""
     if not had_transcript:
         return False
-    if count_action_plan_sections(pasted_text) < 2:
+    if count_action_plan_sections(pasted_text) < 1:
         return False
     return await has_pending_goal_confirmations(session, group_id, week_id)
+
+
+async def preview_paste_assignments(
+    session: AsyncSession,
+    group_id: int,
+    pasted_text: str,
+) -> AutoExtractionResult:
+    """Разбор @-секций без записи задач и без уведомлений участникам."""
+    all_active = await list_active_members_for_group(session, group_id)
+    result = AutoExtractionResult()
+    plan = (pasted_text or "").strip()
+    if not plan:
+        return result
+
+    result.unmatched_headers = list_unmatched_action_plan_headers(
+        plan,
+        [m.full_name for m in all_active],
+    )
+    matched = [
+        member
+        for member in all_active
+        if member_has_action_plan_section(plan, member.full_name)
+    ]
+    if not matched:
+        if not result.unmatched_headers:
+            result.without_goals.append(("@-секция из вставки", REASON_NO_MEMBER_MATCH))
+        return result
+
+    for member in matched:
+        dialog = await get_or_create_dialog_state(session, member.id)
+        ctx = DialogContext.from_json(dialog.context_json)
+        if not ctx.onboarded:
+            result.without_goals.append((member.full_name, REASON_NOT_ONBOARDED))
+            continue
+        tasks = extract_tasks_from_action_plan(plan, member.full_name) or []
+        if not tasks:
+            result.without_goals.append((member.full_name, REASON_NO_GOALS))
+            continue
+        result.sent_with_goals.append(member.full_name)
+        result.sent_tasks[member.full_name] = list(tasks)
+    return result
 
 
 async def trigger_auto_goal_setup(
