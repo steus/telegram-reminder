@@ -994,6 +994,10 @@ async def handle_facilitator_edit_goals_text(message: Message, state: FSMContext
         await state.clear()
         return
 
+    await message.answer(
+        "Принял — сохраняю список, обычно несколько секунд. Подожди подтверждение."
+    )
+
     texts = await structure_goals(message.text or "")
     if not texts:
         await message.answer(
