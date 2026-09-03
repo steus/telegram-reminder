@@ -55,6 +55,8 @@ REASON_NO_MEMBER_MATCH = "нет участника с таким именем �
 @dataclass
 class AutoExtractionResult:
     sent_with_goals: list[str] = field(default_factory=list)
+    # Имя участника → тексты задач, ушедшие на экран подтверждения.
+    sent_tasks: dict[str, list[str]] = field(default_factory=dict)
     without_goals: list[tuple[str, str]] = field(default_factory=list)
     unmatched_headers: list[str] = field(default_factory=list)
     no_auto_members: bool = False
@@ -72,18 +74,25 @@ def format_facilitator_report(result: AutoExtractionResult, *, saved_only: bool 
     if result.no_auto_members:
         lines.append("Нет участников в режиме auto — некому отправлять.")
     elif result.sent_with_goals:
-        names = ", ".join(result.sent_with_goals)
         lines.append(
-            f"Экран подтверждения отправлен ({len(result.sent_with_goals)}): {names}."
+            f"Экран подтверждения отправлен ({len(result.sent_with_goals)}):"
         )
+        for name in result.sent_with_goals:
+            lines.append(f"\n{name}:")
+            tasks = result.sent_tasks.get(name) or []
+            if tasks:
+                for idx, task in enumerate(tasks, start=1):
+                    lines.append(f"  {idx}. {task}")
+            else:
+                lines.append("  (список задач недоступен)")
     if result.without_goals:
-        lines.append("Не удалось назначить задачи:")
+        lines.append("\nНе удалось назначить задачи:")
         for name, reason in result.without_goals:
             lines.append(f"  • {name} — {reason}")
     elif not result.no_auto_members and not result.sent_with_goals:
         lines.append("Никому не отправлено — проверь онбординг участников.")
     if result.unmatched_headers:
-        lines.append("Не сопоставлены с участниками группы:")
+        lines.append("\nНе сопоставлены с участниками группы:")
         for header in result.unmatched_headers:
             lines.append(f"  • @{header}")
         lines.append("Можно назначить вручную кнопками ниже.")
@@ -266,6 +275,8 @@ async def run_auto_extraction_for_group(
         if reason == "goals_found":
             await _notify_member(bot, session, member, week, reason)
             result.sent_with_goals.append(member.full_name)
+            tasks = await list_tasks_for_member_week(session, member.id, week.id)
+            result.sent_tasks[member.full_name] = [t.text for t in tasks]
 
     return result
 

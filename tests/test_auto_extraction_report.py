@@ -11,10 +11,18 @@ from app.services.auto_goal_setup import (
 def test_format_facilitator_report_with_assignments() -> None:
     result = AutoExtractionResult(
         sent_with_goals=["Stepan Teus"],
+        sent_tasks={
+            "Stepan Teus": [
+                "Довести бухгалтерию",
+                "Согласовать договор",
+            ]
+        },
         without_goals=[("Maria", REASON_NO_GOALS)],
     )
     text = format_facilitator_report(result)
     assert "Stepan Teus" in text
+    assert "Довести бухгалтерию" in text
+    assert "Согласовать договор" in text
     assert "Maria" in text
     assert REASON_NO_GOALS in text
 
@@ -42,6 +50,7 @@ def test_format_facilitator_report_not_onboarded() -> None:
 def test_format_facilitator_report_unmatched_headers() -> None:
     result = AutoExtractionResult(
         sent_with_goals=["Stepan Teus"],
+        sent_tasks={"Stepan Teus": ["Задача 1"]},
         unmatched_headers=["Denisskud", "MayaMich"],
     )
     text = format_facilitator_report(result)
@@ -49,3 +58,4 @@ def test_format_facilitator_report_unmatched_headers() -> None:
     assert "@MayaMich" in text
     assert "Не сопоставлены" in text
     assert "кнопками" in text
+    assert "Задача 1" in text

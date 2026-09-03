@@ -91,3 +91,5 @@
   **Фикс:** ведущий в `onboarding_survey` — `@`-секции/`group_paste_*` уходили
   в анкету (profile раньше facilitator); приоритет paste —
   `app/bot/facilitator_priority.py`.
+  Отчёт ведущему после paste показывает список задач по участникам; одна
+  @-секция в paste-режиме обрабатывается сразу (не ждёт `/group_paste_done`).

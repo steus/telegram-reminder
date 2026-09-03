@@ -475,10 +475,11 @@ async def _begin_paste_transcript(message: Message, state: FSMContext):
 async def _show_paste_prompt(message: Message) -> None:
     await message.answer(
         "Жду текст «Плана действий». Можно так:\n\n"
-        "1) Весь план одним сообщением (несколько @-секций) → сразу обработаю.\n"
-        "2) По частям (@Speaker 1, потом @Степан …) → в конце /"
-        f"{CMD_GROUP_PASTE_DONE}.\n"
-        f"3) Одна @-секция без /{CMD_GROUP_PASTE_TRANSCRIPT} — тоже сработает "
+        "1) Одна или несколько @-секций одним сообщением → сразу обработаю "
+        "и покажу, кому что ушло.\n"
+        "2) По частям: каждая @-секция обрабатывается сразу "
+        f"(или накопи и заверши /{CMD_GROUP_PASTE_DONE}).\n"
+        f"3) Без /{CMD_GROUP_PASTE_TRANSCRIPT} — одна @-секция тоже сработает "
         f"(если не вводишь свои задачи через /{CMD_GOALS})."
     )
 
@@ -617,18 +618,9 @@ async def _process_paste_chunk(
     )
 
     section_count = count_action_plan_sections(combined)
-    if finalize_single_section and section_count == 1:
-        await _finalize_transcript(
-            message,
-            state,
-            group_id=group_id or group.id,
-            text=combined,
-            ctx=ctx,
-            member_id=member_id,
-        )
-        return
-
-    if not pending and section_count >= 2:
+    # Любая полная @-секция (одна или несколько) — сразу в обработку,
+    # чтобы ведущий видел отчёт с задачами, а не «Принял… жди /paste_done».
+    if section_count >= 1:
         await _finalize_transcript(
             message,
             state,
@@ -640,8 +632,8 @@ async def _process_paste_chunk(
         return
 
     await message.answer(
-        f"Принял ({len(combined)} символов). "
-        f"Пришли следующие @-секции, затем /{CMD_GROUP_PASTE_DONE}."
+        f"Принял ({len(combined)} символов), но @-секций пока не видно.\n"
+        f"Пришли блок вида «@Имя» и список задач, либо /{CMD_GROUP_PASTE_DONE}."
     )
 
 
